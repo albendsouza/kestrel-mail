@@ -65,7 +65,7 @@ interface Toast {
   action?: { label: string; run: () => void }
 }
 
-type Overlay = 'palette' | 'help' | 'remind' | 'label' | 'stats' | 'window' | null
+type Overlay = 'palette' | 'help' | 'remind' | 'label' | 'stats' | 'window' | 'signout' | null
 
 // Choices for how far back the inbox reaches; 2 weeks is the default.
 const WINDOWS: { days: number | null; label: string }[] = [
@@ -955,6 +955,7 @@ function Mailbox({ ctx, account }: { ctx: Context; account: Account }) {
           onCompose={() => startCompose('new')}
           onStats={() => setOverlay('stats')}
           onSwitchAccount={() => void window.kestrel.useAccount(null)}
+          onSignOut={() => setOverlay('signout')}
           onCollapse={toggleSidebar}
           windowLabel={windowLabel(inboxWindow)}
           onWindow={() => setOverlay('window')}
@@ -1254,6 +1255,7 @@ function Mailbox({ ctx, account }: { ctx: Context; account: Account }) {
           }}
         />
       )}
+      {overlay === 'signout' && <SignOutConfirm account={account} onClose={() => setOverlay(null)} toast={toast} />}
       {overlay === 'label' && (open?.summary ?? selected) && (
         <LabelPicker
           thread={(open?.summary ?? selected)!}
@@ -1289,6 +1291,7 @@ function Mailbox({ ctx, account }: { ctx: Context; account: Account }) {
             setQuery(null)
             setOpen(null)
           }}
+          onSignOut={() => setOverlay('signout')}
         />
       )}
       </div>
@@ -1610,6 +1613,37 @@ function StatsPanel({ onClose }: { onClose: () => void }) {
 }
 
 // Typed times ("2d", "fri 3pm", "oct 30") or a preset; Enter picks.
+// Signing out revokes Kestrel's access with Google and forgets the account on this Mac.
+function SignOutConfirm({ account, onClose, toast }: { account: Account; onClose: () => void; toast: (text: string) => void }) {
+  const [busy, setBusy] = useState(false)
+  const gmail = account.provider === 'gmail'
+  const signOut = async () => {
+    setBusy(true)
+    const { revoked } = await window.kestrel.signOut(account.id)
+    // This tab goes to the welcome screen, where you can sign in again.
+    if (gmail && !revoked) toast("Signed out. Google couldn't be reached to revoke access; remove Kestrel at myaccount.google.com/permissions.")
+  }
+  return (
+    <div className="overlay" onMouseDown={busy ? undefined : onClose} onKeyDown={e => e.key === 'Escape' && !busy && onClose()}>
+      <div className="help signout" onMouseDown={e => e.stopPropagation()}>
+        <h2>Sign out of {account.email}?</h2>
+        <p className="muted">
+          {gmail ? 'Google stops letting Kestrel read this account, and ' : ''}this Mac forgets it: its sign-in, cached mail, reminders and the labels you set
+          with L. Nothing in Gmail changes, and you can sign in again any time.
+        </p>
+        <div className="signout-actions">
+          <button className="ghost" onClick={onClose} disabled={busy}>
+            Cancel
+          </button>
+          <button className="primary danger" autoFocus onClick={() => void signOut()} disabled={busy}>
+            {busy ? 'Signing out…' : 'Sign out'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function LabelPicker({ thread, onPick, onClose }: { thread: ThreadSummary; onPick: (label: AutoLabel | null) => void; onClose: () => void }) {
   const [text, setText] = useState('')
   const [index, setIndex] = useState(0)
@@ -1742,6 +1776,7 @@ function Palette({
   splits,
   run,
   goSplit,
+  onSignOut,
   onClose
 }: {
   ctx: Context
@@ -1749,6 +1784,7 @@ function Palette({
   splits: SplitCount[]
   run: (c: Command) => void
   goSplit: (id: string) => void
+  onSignOut: () => void
   onClose: () => void
 }) {
   const [text, setText] = useState('')
@@ -1767,14 +1803,10 @@ function Palette({
       ...accountItems,
       { label: 'Add or switch account in this tab', run: () => void window.kestrel.useAccount(null) },
       { label: 'Take the guided tour', run: () => void window.kestrel.startTour() },
-      {
-        label: `Sign out of ${account.email}`,
-        run: () => {
-          if (confirm(`Remove ${account.email} from Kestrel?`)) void window.kestrel.removeAccount(account.id)
-        }
-      }
+      { label: 'Sign in to another account', run: () => void window.kestrel.useAccount(null) },
+      { label: `Sign out of ${account.email}`, run: onSignOut }
     ]
-  }, [ctx.accounts, account, splits, run, goSplit])
+  }, [ctx.accounts, account, splits, run, goSplit, onSignOut])
 
   const words = text.toLowerCase().split(/\s+/).filter(Boolean)
   const filtered = items.filter(i => words.every(w => i.label.toLowerCase().includes(w)))

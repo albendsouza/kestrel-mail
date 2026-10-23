@@ -32,3 +32,18 @@ describe('parseGoogleCredentials', () => {
     }
   })
 })
+
+describe('revokeToken', () => {
+  it('asks Google to revoke the token, and treats an already-dead token as revoked', async () => {
+    const { revokeToken } = await import('../src/main/google-auth')
+    const calls: { url: string; body: string }[] = []
+    const fake = (status: number) =>
+      (async (url: string, init?: RequestInit) => (calls.push({ url, body: String(init?.body) }), new Response('', { status }))) as unknown as typeof fetch
+    expect(await revokeToken('1//refresh', fake(200))).toBe(true)
+    expect(calls[0]).toEqual({ url: 'https://oauth2.googleapis.com/revoke', body: 'token=1%2F%2Frefresh' })
+    expect(await revokeToken('1//old', fake(400))).toBe(true)
+    expect(await revokeToken('1//x', fake(503))).toBe(false)
+    const offline = (async () => Promise.reject(new TypeError('fetch failed'))) as unknown as typeof fetch
+    expect(await revokeToken('1//x', offline)).toBe(false)
+  })
+})

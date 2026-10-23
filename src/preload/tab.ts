@@ -21,7 +21,7 @@ const api = {
   setGoogleClient: (clientId: string, clientSecret: string) => ipcRenderer.invoke('kestrel:setGoogleClient', clientId, clientSecret),
   openSetupGuide: () => ipcRenderer.invoke('kestrel:openSetupGuide'),
   reopenSignIn: () => ipcRenderer.invoke('kestrel:reopenSignIn'),
-  removeAccount: (accountId: string) => ipcRenderer.invoke('kestrel:removeAccount', accountId),
+  signOut: (accountId: string): Promise<{ revoked: boolean }> => ipcRenderer.invoke('kestrel:signOut', accountId),
   openExternal: (url: string) => ipcRenderer.invoke('kestrel:openExternal', url),
   onCommand: (cb: (command: { type: string; [k: string]: unknown }) => void) => {
     const listener = (_e: Electron.IpcRendererEvent, command: { type: string }) => cb(command)

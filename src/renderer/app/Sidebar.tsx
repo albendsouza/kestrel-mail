@@ -73,6 +73,7 @@ export function Sidebar({
   onCompose,
   onStats,
   onSwitchAccount,
+  onSignOut,
   onCollapse,
   onHideLabel,
   windowLabel,
@@ -91,6 +92,7 @@ export function Sidebar({
   onCompose: () => void
   onStats: () => void
   onSwitchAccount: () => void
+  onSignOut: () => void
   onCollapse: () => void
   onHideLabel: (labelId: string, hidden: boolean) => void
   windowLabel: string
@@ -103,6 +105,7 @@ export function Sidebar({
   const [autoOpen, toggleAuto] = useToggle('kestrel.sidebar.auto', true)
   const [allLabels, setAllLabels] = useState(false)
   const [showHidden, setShowHidden] = useState(false)
+  const [accountMenu, setAccountMenu] = useState(false)
   const label = (id: string) => labels.find(l => l.id === id)
   // Kestrel's own Gmail labels (Kestrel/Marketing) show under Auto labels instead.
   const sorted = labels.filter(l => !l.system && !l.name.startsWith('Kestrel/')).sort((a, b) => a.name.localeCompare(b.name))
@@ -267,7 +270,20 @@ export function Sidebar({
           </span>
           <span className="side-name">Stats</span>
         </button>
-        <button className="side-account" onClick={onSwitchAccount} title="Switch or add an account">
+        {accountMenu && (
+          <div className="account-menu" role="menu" onMouseLeave={() => setAccountMenu(false)}>
+            <button role="menuitem" onClick={() => (setAccountMenu(false), onSwitchAccount())}>
+              Switch account
+            </button>
+            <button role="menuitem" onClick={() => (setAccountMenu(false), onSwitchAccount())}>
+              Sign in to another account
+            </button>
+            <button role="menuitem" className="danger" onClick={() => (setAccountMenu(false), onSignOut())}>
+              Sign out of {account.email}
+            </button>
+          </div>
+        )}
+        <button className="side-account" onClick={() => setAccountMenu(v => !v)} title="Account: switch, sign in or sign out" aria-haspopup="menu" aria-expanded={accountMenu}>
           <span className="avatar">{(account.name || account.email).slice(0, 1).toUpperCase()}</span>
           <span className="side-account-text">
             <strong>{account.name}</strong>

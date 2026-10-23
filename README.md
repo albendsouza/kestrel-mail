@@ -65,6 +65,11 @@ By hand:
 KESTREL_GOOGLE_CREDENTIALS=/path/to/client_secret.json npm start
 ```
 
+Click your account at the bottom of the sidebar to switch accounts, sign in to
+another one, or **sign out**. Signing out revokes Kestrel's access with Google and
+forgets the account on this Mac (its sign-in, cached mail, reminders and label
+corrections); nothing in Gmail changes.
+
 Sign-in uses PKCE and a loopback redirect on `127.0.0.1`, as Google recommends for
 desktop apps. Refresh tokens are encrypted with the OS keychain through Electron
 `safeStorage`. Release builds bake the client in, so their users only click

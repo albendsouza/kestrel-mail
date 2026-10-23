@@ -11,6 +11,25 @@ import { openExternalSafely } from './security'
 
 const AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth'
 const TOKEN_URL = 'https://oauth2.googleapis.com/token'
+const REVOKE_URL = 'https://oauth2.googleapis.com/revoke'
+
+// Tells Google to cancel a refresh token, so Kestrel's access to that account ends
+// there too (it disappears from myaccount.google.com/permissions). Best effort:
+// returns false if Google couldn't be reached, and the token is forgotten anyway.
+export async function revokeToken(token: string, fetchFn: typeof fetch = fetch): Promise<boolean> {
+  try {
+    const res = await fetchFn(REVOKE_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ token }).toString(),
+      signal: AbortSignal.timeout(8000)
+    })
+    // 400 means the token was already invalid: as good as revoked.
+    return res.ok || res.status === 400
+  } catch {
+    return false
+  }
+}
 const USERINFO_URL = 'https://openidconnect.googleapis.com/v1/userinfo'
 const SCOPES = ['openid', 'email', 'profile', 'https://www.googleapis.com/auth/gmail.modify']
 const SIGN_IN_TIMEOUT_MS = 5 * 60_000

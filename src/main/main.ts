@@ -4,7 +4,7 @@ import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme, net, Notificati
 import { pathToFileURL } from 'url'
 
 import { APP_HOST, APP_ORIGIN, APP_SCHEME, UNDO_SEND_MS, distDir, isDemo, preloadPath } from './config'
-import { googleClientFromEnv, isGoogleClientId, SignInError, signInWithGoogle, TokenManager, type GoogleClient } from './google-auth'
+import { googleClientFromEnv, isGoogleClientId, revokeToken, SignInError, signInWithGoogle, TokenManager, type GoogleClient } from './google-auth'
 import { buildMenu } from './menu'
 import { isTrustedSender, openExternalSafely } from './security'
 import { Store } from './store'
@@ -317,9 +317,13 @@ function registerIpc(): void {
     return !!pendingSignIn?.url
   })
 
-  handle('kestrel:removeAccount', (_event, accountId: string) => {
+  // Sign out: Google revokes Kestrel's access, then this Mac forgets the account
+  // (its token, cached mail, reminders and label corrections). Gmail itself is untouched.
+  handle('kestrel:signOut', async (_event, accountId: string) => {
+    const refresh = store.account(accountId)?.provider === 'gmail' ? store.getRefreshToken(accountId) : null
+    const revoked = refresh ? await revokeToken(refresh) : true
     removeAccount(accountId)
-    return true
+    return { revoked }
   })
 
   // The tour runs in a fresh practice inbox. A new id each time means a stale

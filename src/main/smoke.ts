@@ -408,6 +408,18 @@ export async function runSmoke(win: AppWindow, outDir: string, token?: (accountI
   }
 
   // With your Google client from kestrel.local.json, the welcome screen is ready to sign in.
+  // The account menu signs out: the tab goes back to the welcome screen to sign in again.
+  const runSignOutSmoke = async () => {
+    await evalJs('document.querySelector(".side-account").click()')
+    check('the account row opens a menu with sign out', await waitFor('[...document.querySelectorAll(".account-menu button")].some(b => b.textContent.startsWith("Sign out of"))'))
+    await shot('26-account-menu')
+    await evalJs('[...document.querySelectorAll(".account-menu button")].find(b => b.textContent.startsWith("Sign out of")).click()')
+    check('sign out asks first', await waitFor('(document.querySelector(".signout h2")?.textContent ?? "").startsWith("Sign out of you@kestrel.demo")'))
+    await evalJs('document.querySelector(".signout .primary").click()').catch(() => {})
+    check('after signing out, the welcome screen offers sign-in', await waitFor('!!document.querySelector(".onboarding") && [...document.querySelectorAll(".onboarding button")].some(b => /Sign in with Google|Set up Gmail|Try the demo inbox/.test(b.textContent))', 10_000))
+    await shot('27-signed-out')
+  }
+
   const runSignInReadySmoke = async () => {
     // Switching accounts reloads the page, which can cut the call short.
     await evalJs('window.kestrel.useAccount(null)').catch(() => {})
@@ -595,6 +607,7 @@ export async function runSmoke(win: AppWindow, outDir: string, token?: (accountI
       await runInsightsSmoke()
       await runSidebarSmoke()
       if (process.env.KESTREL_GOOGLE_CREDENTIALS) await runSignInReadySmoke()
+      await runSignOutSmoke()
       // First-run flows (tour, setup guide, client form) only with npm run smoke:all.
       if (process.env.KESTREL_SMOKE_SUITES === 'all') await runTourSmoke()
     }
