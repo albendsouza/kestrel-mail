@@ -42,6 +42,13 @@ export function sanitizeEmailHtml(html: string, allowRemote: boolean): { html: s
   }
 }
 
+// Mail with a design of its own (newsletters, receipts) paints its own backgrounds and
+// is written for a light page. Mail a person typed has none, even when it's HTML:
+// Gmail wraps ordinary mail in HTML and its signatures hard-code near-black text.
+export function hasOwnDesign(html: string): boolean {
+  return /\bbgcolor\s*=|background(-color|-image)?\s*:/i.test(html)
+}
+
 export function MessageBody({
   message,
   allowRemote,
@@ -62,16 +69,22 @@ export function MessageBody({
     const { html, blockedImages } = sanitizeEmailHtml(source, allowRemote)
     // The iframe inherits the page CSP; this narrows it further for message content.
     const csp = `default-src 'none'; img-src data: cid:${allowRemote ? ' https:' : ''}; style-src 'unsafe-inline'; font-src data:`
-    const plainDark = !message.html && dark
-    // The frame's color-scheme must match the app's, or Chromium paints an opaque
-    // white backdrop behind it. HTML mail is written for light backgrounds, so it gets white on purpose.
+    // In dark mode, everything follows the app's theme except mail with a design of its own,
+    // which gets the white page it was made for.
+    const designed = !!message.html && hasOwnDesign(html)
+    const darkMail = dark && !designed
+    // The frame's color-scheme must match the app's, or Chromium paints an opaque white backdrop behind it.
     const doc = `<!doctype html><html><head><meta http-equiv="Content-Security-Policy" content="${csp}">
 <style>
-:root{color-scheme:${plainDark ? 'dark' : 'light'}}
-html,body{margin:0;padding:0;font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,sans-serif;color:${plainDark ? '#e6e6e9' : '#1f2328'};background:${message.html ? '#fff' : 'transparent'};overflow:hidden}
-a{color:${plainDark ? '#8ab4ff' : '#2463eb'}}
+:root{color-scheme:${darkMail ? 'dark' : 'light'}}
+html,body{margin:0;padding:0;font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,sans-serif;color:${darkMail ? '#e6e6e9' : '#1f2328'};background:${designed ? '#fff' : 'transparent'};overflow:hidden}
+a{color:${darkMail ? '#8ab4ff' : '#2463eb'}}
 img{max-width:100%;height:auto}
-blockquote{margin:0 0 0 8px;padding-left:12px;border-left:2px solid #ccc;color:#666}
+blockquote{margin:0 0 0 8px;padding-left:12px;border-left:2px solid ${darkMail ? '#3a3b42' : '#ccc'};color:${darkMail ? '#9a9ca5' : '#666'}}
+${
+  // Typed mail often hard-codes dark text (signatures, <font color>); in the dark theme it would vanish.
+  darkMail && message.html ? 'body *:not(a):not(a *){color:inherit!important}blockquote,blockquote *:not(a){color:#9a9ca5!important}' : ''
+}
 </style></head><body>${html}</body></html>`
     return { srcDoc: doc, blocked: blockedImages }
   }, [message, allowRemote, dark])
