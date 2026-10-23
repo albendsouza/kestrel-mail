@@ -32,8 +32,8 @@ npm start         # your Gmail (see "Connect Gmail" below)
 ```
 
 Requirements: Node 20 or newer. Kestrel is developed on macOS; smart sorting has
-been tested on Apple silicon (M4 Pro), where it takes about 0.2 to 0.35 s per email
-on the CPU.
+been tested on Apple silicon (M4 Pro). There it takes about 0.04 s per email on the GPU,
+with [laya-mps](https://github.com/afshinm/laya-mps) set up, or about 0.25 s on the CPU.
 
 Smart sorting needs Laya's model, which isn't in this repo (about 1.3 GB). Without
 it Kestrel works normally and keeps every conversation in Important; the status
@@ -44,7 +44,8 @@ npm run laya:install -- /path/to/model --id laya-email-ft1
 ```
 
 [docs/smart-inbox.md](docs/smart-inbox.md) explains how to convert and fine-tune
-one.
+one, and [how to run it on the GPU](docs/smart-inbox.md#on-the-gpu), which is about six
+times faster.
 
 ## Connect Gmail
 
@@ -151,8 +152,9 @@ it with `⌘K` → *Take the guided tour*.
 ```
 main process ─┬─ utilityProcess "Kestrel Sync"   one AccountEngine per account:
               │                                   cache, outbox, undo, Gmail sync
-              ├─ utilityProcess "Kestrel Sort"   Laya on ONNX Runtime (CPU),
-              │        ▲  MessagePort              sorts threads for the engines
+              ├─ utilityProcess "Kestrel Sort"   Laya on the GPU (PyTorch MPS worker)
+              │        ▲  MessagePort              or the CPU (ONNX Runtime), sorts
+              │        │                           threads for the engines
               │        └──────────────── Sync
               └─ windows: a tab strip plus one sandboxed React view per tab,
                  each talking straight to Sync over its own MessagePort
@@ -163,9 +165,10 @@ main process ─┬─ utilityProcess "Kestrel Sync"   one AccountEngine per acc
 - **Gmail sync:** a snapshot of what the inbox window covers, then `history.list`
   every 30 s, with thread details fetched 25 at a time through Gmail's batch
   endpoint. A token-bucket budget keeps Kestrel inside Gmail's per-user quota.
-- **Sorting** runs in its own low-priority process, so it never slows the app. Each
-  thread is sorted once per Gmail version and model, and Sort exits when idle to
-  give the model's memory back.
+- **Sorting** runs in its own low-priority process, so it never slows the app. It uses
+  the Mac's GPU when laya-mps is set up, which leaves the CPU free. Each thread is
+  sorted once per Gmail version and model, and Sort exits when idle to give the
+  model's memory back.
 
 Details: [docs/architecture.md](docs/architecture.md) and
 [docs/smart-inbox.md](docs/smart-inbox.md).
@@ -217,13 +220,17 @@ asks for a privacy policy, a demo video and possibly a security assessment.
 
 Attachments, rich-text compose, Gmail push through Pub/Sub (Kestrel polls every
 30 s), IMAP and Outlook, snippets, Apple's on-device model as a second opinion on
-uncertain mail, and hosting Laya's model for download.
+uncertain mail, hosting Laya's model for download, and bundling the GPU runtime in
+release builds (today it needs a laya-mps checkout).
 
 ## Credits
 
 - [Laya](https://github.com/NandhaKishorM/laya) by Convai Innovations
   (Apache-2.0). Kestrel vendors its TypeScript runtime in `vendor/laya-ts` and
   fine-tunes its multilingual checkpoint.
+- [laya-mps](https://github.com/afshinm/laya-mps) by Afshin Mehrabani (MIT) runs Laya
+  on the Mac's GPU. Kestrel's GPU worker uses its loader in its environment; no
+  laya-mps code is copied.
 - [Inbox Zero](https://github.com/elie222/inbox-zero) inspired Senders, Reply Zero
   and stats. No Inbox Zero code is included.
 - Superhuman inspired the architecture and the split inbox. No Superhuman code or

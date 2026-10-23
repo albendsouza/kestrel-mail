@@ -3,7 +3,8 @@
 Kestrel sorts mail with [Laya](https://github.com/NandhaKishorM/laya), an
 Apache-2.0 encoder model that answers typed questions about text in one pass. It
 generates no text, so there's nothing to parse and nothing it can make up. Kestrel
-runs it on the Mac's CPU through ONNX Runtime. There are no hand-written sorting
+runs it on the Mac: on the GPU through PyTorch MPS when [laya-mps](https://github.com/afshinm/laya-mps)
+is set up, otherwise on the CPU through ONNX Runtime. There are no hand-written sorting
 rules: an earlier rules-first version was built, tried on a real inbox and dropped.
 
 ## What Laya is asked
@@ -83,6 +84,43 @@ with topics. `KESTREL_LAYA_MODEL` points Kestrel at another folder.
 Zero-shot, neither is good enough. Fine-tuned, the multilingual checkpoint is fast,
 small and accurate, and it reads Hinglish, so Kestrel uses it.
 
+### On the GPU
+
+Kestrel Sort runs Laya on the Mac's GPU when the installed model also has its PyTorch
+checkpoint. It starts `src/sort/gpu_worker.py` in laya-mps's Python environment and talks to
+it over stdin and stdout. If the worker can't start or a request fails, Sort sorts on the
+CPU instead. `KESTREL_LAYA_DEVICE=cpu` forces the CPU.
+
+```bash
+git clone https://github.com/afshinm/laya-mps.git ../laya-mps
+(cd ../laya-mps && uv sync --locked --no-dev)
+npm run laya:install -- ./model --id laya-email-ft1 --torch <laya-train output> --gpu ../laya-mps
+```
+
+`--torch` is the PyTorch checkpoint the ONNX export was made from; laya-train writes it.
+`--gpu-memory` picks laya-mps's memory setting (`reduced` by default). Both runtimes give
+the same answers, so changing runtime doesn't re-sort anything.
+
+Measured on an M4 Pro with 24 GB, on the newest 200 emails of a real inbox, with ft1 (3
+questions per email):
+
+| Runtime | One new email (median) | A backlog | Peak memory |
+| --- | --- | --- | --- |
+| CPU, ONNX Runtime, half the cores (what Sort did before) | 254 ms | 3.3 emails/s | 1.7 GB |
+| CPU, all 14 cores | 253 ms | 2.8 emails/s | 2.8 GB |
+| GPU, laya-mps `reduced` memory, one email per pass | 42 ms | about 24 emails/s | 1.6 GB |
+| GPU, laya-mps `full` memory, one email per pass | 41 ms | about 24 emails/s | 3.1 GB |
+
+- **Same answers:** all 200 GPU verdicts matched the CPU's: split, kind, needs-reply and
+  urgent. The largest probability difference was 0.0001.
+- **`full` memory gains nothing here:** it's no faster than `reduced` and holds 1.5 GB more.
+- **Batching doesn't help on the GPU:** eight emails per pass took 47 ms each and peaked at
+  3.6 GB, so the worker runs one email per pass.
+- **The larger model:** typed-decisions (ModernBERT-large, 4 questions) went from 981 ms to
+  132 ms per email.
+
+`laya-training/mps/run.sh` (outside this repo) repeats the measurement.
+
 ### Fine-tuning
 
 Training rows are built from labelled emails with `scripts/laya/rows.mjs`, which
@@ -122,4 +160,6 @@ promotions written to sound like a person. The next model is trained on all thre
 - Apple's on-device Foundation Models as a second opinion on low-confidence verdicts
   (it needs Apple Intelligence set up on the Mac).
 - Hosting the fine-tuned model for download, so installs don't have to convert one.
-- Trying ONNX Runtime's CoreML provider (Neural Engine and GPU) against the CPU.
+- Shipping the GPU runtime in release builds. Today it needs a laya-mps checkout with its
+  Python environment, about 700 MB. laya-mps found ONNX Runtime's Core ML route ran on
+  the CPU, and the Neural Engine export capped inputs at 96 tokens.

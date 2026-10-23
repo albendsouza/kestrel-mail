@@ -12,7 +12,8 @@ main process (src/main)
  │     ▲   ▲
  │     │   └── MessagePort per tab: requests, responses, engine events
  │     └────── MessagePort to Sort
- └─ Kestrel Sort (src/sort/host.ts) ── Laya on ONNX Runtime
+ └─ Kestrel Sort (src/sort/host.ts) ── Laya on the GPU (Python worker, PyTorch MPS)
+                                       or on the CPU (ONNX Runtime)
 ```
 
 The main process creates each `MessageChannel` and hands one end to each side, so
@@ -69,9 +70,13 @@ splits. Mechanically:
    current version and model, newest first, 8 per request.
 2. `PortSorter` (src/sync/sorter.ts) sends them to Sort and waits. It gives up only
    if Sort's port closes (Sort crashed or exited) or after 10 minutes.
-3. Sort (src/sort/host.ts) loads the model on first use, at low process priority on
-   half the cores, and runs four threads per forward pass with ONNX Runtime's
-   memory arena turned off, so memory is released after every pass.
+3. Sort (src/sort/host.ts) loads the model on first use. If the model folder has a GPU
+   checkpoint and a `gpu.json`, Sort starts a Python worker (src/sort/gpu.ts and
+   gpu_worker.py) that runs Laya on the Mac's GPU through laya-mps, one email per pass.
+   It exits with Sort, and its stdin closing stops it too. Otherwise, or if the worker
+   fails, Sort uses ONNX Runtime at low process priority on half the cores. There it runs
+   four threads per pass with the memory arena turned off, so memory is released after
+   every pass.
 4. Verdicts are stored with the thread version and the model's name. Installing a
    new model re-sorts the inbox.
 

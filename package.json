@@ -86,7 +86,8 @@
       "category": "Office"
     },
     "asarUnpack": [
-      "node_modules/onnxruntime-node/**"
+      "node_modules/onnxruntime-node/**",
+      "dist/sort/gpu_worker.py"
     ]
   }
 }

@@ -6,7 +6,7 @@
 |---|---|
 | `src/main` | Electron main process: windows and tabs, Google sign-in, the encrypted store, menus, starting Sync and Sort, and the smoke-test driver |
 | `src/sync` | Kestrel Sync: `engine.ts` (the mail model), `providers/` (Gmail, demo, the tour's practice inbox), `split.ts`, `sorter.ts`, `mime.ts` |
-| `src/sort` | Kestrel Sort: runs Laya |
+| `src/sort` | Kestrel Sort: runs Laya, on the GPU through a Python worker (`gpu.ts`, `gpu_worker.py`) or on the CPU |
 | `src/shared` | Types and logic both sides use: `types.ts`, `sorting.ts` (Laya's questions and the label and split rules), date parsing, credentials |
 | `src/renderer` | React UI: `app` (the mail view, sidebar, tour, keys), `strip` (tab strip), `guide` (the Google setup guide) |
 | `src/preload` | Sandboxed preload scripts, one per kind of view |
@@ -54,6 +54,7 @@ client.
 | `KESTREL_GOOGLE_CLIENT_ID`, `KESTREL_GOOGLE_CLIENT_SECRET` | the client as values; release builds need these |
 | `KESTREL_USER_DATA` | another profile folder |
 | `KESTREL_LAYA_MODEL` | another Laya model folder |
+| `KESTREL_LAYA_DEVICE=cpu` | sort on the CPU even when the model has a GPU checkpoint |
 | `KESTREL_GMAIL_UNITS_PER_MINUTE` | Gmail quota pace (default 2,400) |
 | `KESTREL_READ_ONLY=1` | refuse every change to Gmail (used by `smoke:live`) |
 | `KESTREL_DEMO_LATENCY_MS` | fake network delay in demo mode |
@@ -64,6 +65,7 @@ client.
 | Script | What it does |
 |---|---|
 | `npm run laya:install -- <folder> [--id name] [--questions file]` | installs an ONNX model where Kestrel Sort looks for it, with a checksum manifest |
+| `... --torch <checkpoint> --gpu <laya-mps> [--gpu-memory reduced]` | also installs the PyTorch checkpoint, so Sort runs Laya on the GPU ([smart-inbox.md](smart-inbox.md#on-the-gpu)) |
 | `node scripts/laya/rows.mjs <files> --out <dir> [--topics file]` | turns labelled emails into Laya training rows, holding out a test slice |
 | `node scripts/laya/eval.mjs <model> <files>` | scores a model the way Kestrel runs it |
 

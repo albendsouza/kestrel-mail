@@ -2,6 +2,8 @@
 // process sends it threads over a MessagePort and gets back a verdict for each.
 // It loads the model on first use and exits after a few idle minutes to hand
 // the memory back; the main process starts a fresh one, which stays small until needed.
+// When the installed model has a GPU checkpoint, Laya runs on the Mac's GPU through a
+// Python worker (gpu.ts); otherwise, or if that fails, on the CPU with ONNX Runtime.
 
 import fs from 'fs'
 import os from 'os'
@@ -9,6 +11,7 @@ import path from 'path'
 
 import { Agent } from '../../vendor/laya-ts/src/index'
 import { KINDS, SORT_QUESTIONS, TOPICS, sortState } from '../shared/sorting'
+import { GpuLaya } from './gpu'
 
 import type { MailKind, NoticeTopic, SortVerdict } from '../shared/sorting'
 import type { SortRequest, SortResponse } from '../sync/sorter'
@@ -47,9 +50,69 @@ function load(): Promise<Agent> {
   return agent
 }
 
+// The GPU worker, when the model folder has a checkpoint for it (laya:install --torch) and a
+// gpu.json naming laya-mps's Python. KESTREL_LAYA_DEVICE=cpu keeps sorting on the CPU.
+let gpu: Promise<GpuLaya | null> | null = null
+let gpuWorker: GpuLaya | null = null
+
+function loadGpu(): Promise<GpuLaya | null> {
+  if (!gpu) {
+    gpu = (async () => {
+      const torchDir = path.join(modelDir, 'torch')
+      if (process.env.KESTREL_LAYA_DEVICE === 'cpu' || !fs.existsSync(path.join(torchDir, 'model.safetensors'))) return null
+      let config: { python?: string; memory?: string }
+      try {
+        config = JSON.parse(fs.readFileSync(path.join(modelDir, 'gpu.json'), 'utf8'))
+      } catch {
+        return null
+      }
+      if (!config.python) return null
+      // Python can't read inside the asar archive; release builds unpack the worker beside it.
+      const worker = path.join(__dirname, 'gpu_worker.py').replace(`app.asar${path.sep}`, `app.asar.unpacked${path.sep}`)
+      try {
+        gpuWorker = await GpuLaya.start(config.python, ['-I', worker, '--model', torchDir, '--memory', config.memory ?? 'reduced'])
+        console.log(`Kestrel Sort: Laya on the GPU (${gpuWorker.ready.memory} memory, loaded in ${gpuWorker.ready.load_seconds} s)`)
+        return gpuWorker
+      } catch (e) {
+        console.error(`Kestrel Sort: the GPU isn't available, sorting on the CPU (${e instanceof Error ? e.message : e})`)
+        return null
+      }
+    })()
+  }
+  return gpu
+}
+
+// Answers from the GPU, or null to use the CPU. A failed request turns the GPU off until Sort restarts.
+async function onGpu(states: unknown[], questions: Record<string, unknown>): Promise<Answers[] | null> {
+  const worker = await loadGpu()
+  if (!worker) return null
+  try {
+    return (await worker.predict(states, questions)) as Answers[]
+  } catch (e) {
+    console.error(`Kestrel Sort: the GPU failed, sorting on the CPU from now on (${e instanceof Error ? e.message : e})`)
+    worker.close()
+    gpuWorker = null
+    gpu = Promise.resolve(null)
+    return null
+  }
+}
+
+async function onCpu(states: unknown[], questions: Record<string, unknown>): Promise<Answers[]> {
+  const laya = await load()
+  const answers: Answers[] = []
+  for (let i = 0; i < states.length; i += PASS) {
+    const results = await laya.predictBatch(states.slice(i, i + PASS), questions as never)
+    for (const r of results) answers.push((r as { answers: Answers }).answers)
+  }
+  return answers
+}
+
 function touch(): void {
   if (idleTimer) clearTimeout(idleTimer)
-  idleTimer = setTimeout(() => process.exit(0), IDLE_EXIT_MS)
+  idleTimer = setTimeout(() => {
+    gpuWorker?.close()
+    process.exit(0)
+  }, IDLE_EXIT_MS)
 }
 
 interface Answers {
@@ -94,17 +157,14 @@ async function sort(req: SortRequest): Promise<SortResponse> {
   try {
     if (!fs.existsSync(path.join(modelDir, 'encoder.onnx'))) throw new ModelMissing(`Laya's model isn't installed in ${modelDir} (run npm run laya:install).`)
     if (!req.items.length) return { id: req.id, model: modelId(), verdicts: [] }
-    const laya = await load()
     readQuestions()
     const { topic: _topic, ...base } = SORT_QUESTIONS
     const questions = hasTopics ? SORT_QUESTIONS : base
-    const verdicts: SortVerdict[] = []
-    for (let i = 0; i < req.items.length; i += PASS) {
-      const states = req.items.slice(i, i + PASS).map(sortState)
-      const results = await laya.predictBatch(states, questions as never)
-      for (const r of results) verdicts.push(verdictOf((r as { answers: Answers }).answers))
-    }
-    return { id: req.id, model: modelId(), verdicts }
+    const states = req.items.map(sortState)
+    // Both runtimes give the same answers (checked to 1e-4 on 200 real emails), so verdicts
+    // keep the model's name either way and nothing is re-sorted when the runtime changes.
+    const answers = (await onGpu(states, questions)) ?? (await onCpu(states, questions))
+    return { id: req.id, model: modelId(), verdicts: answers.map(verdictOf) }
   } catch (e) {
     return { id: req.id, error: e instanceof Error ? e.message : String(e), unavailable: e instanceof ModelMissing }
   } finally {

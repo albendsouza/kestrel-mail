@@ -41,4 +41,6 @@ await Promise.all([
   })
 ])
 cpSync('static', 'dist/renderer', { recursive: true })
+// Kestrel Sort's GPU worker runs in laya-mps's Python, so it ships as source beside host.js.
+cpSync('src/sort/gpu_worker.py', 'dist/sort/gpu_worker.py')
 if (watch) console.log('watch mode not implemented; rerun npm run build')
