@@ -6,6 +6,7 @@ import { dayKey, sameEmail, senderRows } from './insights'
 import { SortUnavailable } from './sorter'
 import { DEFAULT_SPLITS, IMPORTANT_SPLIT, inSplit, splitOrder } from './split'
 
+import { sortInputOf } from '../shared/signals'
 import { labelsFor, verdictFor } from '../shared/sorting'
 import { AUTO_LABELS, DEFAULT_INBOX_WINDOW, FILED_LABEL } from '../shared/types'
 
@@ -30,20 +31,13 @@ import type {
 } from '../shared/types'
 import type { MailProvider } from './providers/provider'
 import type { Sorter } from './sorter'
-import type { SortInput, SortVerdict } from '../shared/sorting'
+import type { SortVerdict } from '../shared/sorting'
 
 // Threads go to Laya a few at a time, so a big first sort shows progress and new mail isn't stuck behind it.
 const SORT_BATCH = 8
 
 // Gmail's version of a thread; demo threads without one change version when they get mail.
 export const versionOf = (t: ThreadSummary) => t.historyId ?? `${t.date}:${t.messageCount}`
-
-const sortInputOf = (t: ThreadSummary): SortInput => ({
-  from: t.from.name && t.from.name !== t.from.email ? `${t.from.name} <${t.from.email}>` : t.from.email,
-  subject: t.subject,
-  body: t.snippet,
-  mailingList: t.listUnsubscribe || t.bulk
-})
 
 export interface CacheStorage {
   load(): Promise<PersistedCache | null>
@@ -492,7 +486,7 @@ export class AccountEngine {
       this.setSortState({ state: 'sorting', done, total: todo.length })
       while (todo.length && !this.stopped) {
         const batch = todo.slice(0, SORT_BATCH)
-        const { model, verdicts } = await this.sorter!.sort(batch.map(sortInputOf))
+        const { model, verdicts } = await this.sorter!.sort(batch.map(t => sortInputOf(t, this.account.email)))
         this.sortModel = model
         batch.forEach((t, i) => this.sorted.set(t.id, { version: versionOf(t), model, verdict: verdicts[i] }))
         done += batch.length
@@ -581,7 +575,7 @@ export class AccountEngine {
     const sender = t.from.email.toLowerCase()
     if (label) {
       this.corrections.set(sender, label)
-      this.correctionLog.push({ from: sortInputOf(t).from, subject: t.subject, body: t.snippet, mailing_list: t.listUnsubscribe || t.bulk, label, at: this.now() })
+      this.correctionLog.push({ from: sortInputOf(t, this.account.email).from, subject: t.subject, body: t.snippet, mailing_list: t.listUnsubscribe || t.bulk, label, at: this.now() })
     } else this.corrections.delete(sender)
     this.changed()
     void this.persist()
@@ -769,7 +763,7 @@ export class AccountEngine {
         for (const t of missing.length ? await this.provider.summaries(missing) : []) this.done.set(t.id, t)
         const todo = chunk.map(id => this.done.get(id)).filter((t): t is ThreadSummary => !!t && !(this.sorted.get(t.id)?.model === this.sortModel && this.sorted.get(t.id)?.version === versionOf(t)))
         if (todo.length) {
-          const { model, verdicts } = await sorter.sort(todo.map(sortInputOf))
+          const { model, verdicts } = await sorter.sort(todo.map(t => sortInputOf(t, this.account.email)))
           todo.forEach((t, k) => this.sorted.set(t.id, { version: versionOf(t), model, verdict: verdicts[k] }))
         }
         for (const id of chunk) {

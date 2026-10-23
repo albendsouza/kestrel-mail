@@ -55,6 +55,18 @@ export interface SortInput {
   subject: string
   body: string // the snippet
   mailingList: boolean
+  signals?: ThreadSignals // for the learned signal layer (signals.ts), never shown to Laya
+}
+
+// Gmail's own facts about a thread, which a snippet can't show.
+export interface ThreadSignals {
+  important: boolean // Gmail flagged it important
+  category: string // Gmail's inbox tab: personal, updates, promotions, social or forums
+  mailingList: boolean // a List-Unsubscribe or Precedence: bulk header
+  undisclosed: boolean // sent to undisclosed recipients
+  toOthers: boolean // not to the recipient alone
+  multi: boolean // more than one message in the thread
+  colleague: boolean // the sender shares the account's own (non-webmail) domain
 }
 
 export function sortState(input: SortInput): Record<string, string> {
@@ -72,6 +84,30 @@ export interface SortVerdict {
   needsReply: number // P(true)
   urgent: number // P(true)
   topic?: NoticeTopic // models before laya-email-2 don't answer it
+  kindProbs?: Partial<Record<MailKind, number>> // every kind's probability, for the signal layer
+}
+
+// Laya's answers to SORT_QUESTIONS as a verdict, the same for the CPU and the GPU runtime.
+// The topic counts only when the model was trained on it.
+export function verdictFromAnswers(
+  answers: {
+    kind?: { choice?: string; answer_confidence?: number; probabilities?: Record<string, number> }
+    needs_reply?: { noul?: number }
+    urgent?: { noul?: number }
+    topic?: { choice?: string }
+  },
+  hasTopics: boolean
+): SortVerdict {
+  const kind = (KINDS as readonly string[]).includes(answers.kind?.choice ?? '') ? (answers.kind!.choice as MailKind) : 'person'
+  const probs = answers.kind?.probabilities
+  return {
+    kind,
+    confidence: answers.kind?.answer_confidence ?? 0,
+    needsReply: answers.needs_reply?.noul ?? 0,
+    urgent: answers.urgent?.noul ?? 0,
+    topic: hasTopics && (TOPICS as readonly string[]).includes(answers.topic?.choice ?? '') ? (answers.topic!.choice as NoticeTopic) : undefined,
+    kindProbs: probs ? Object.fromEntries(KINDS.map(k => [k, probs[k] ?? 0])) : undefined
+  }
 }
 
 // The inbox splits, in tab order. Each sorted thread lands in exactly one.

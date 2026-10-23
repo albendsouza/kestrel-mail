@@ -51,6 +51,53 @@ applies to all of that sender's mail at once, outranks Laya, and is logged
 (`correctionLog` in the cache) as a training example. On mail that was filed away,
 any other label brings it back to the inbox.
 
+## The learned signal layer
+
+Laya reads a 300-character snippet, but Gmail already knows things about each thread:
+- whether it flagged the thread important, and which tab it put it in
+- whether it came through a mailing list
+- whether it went to the recipient alone or to undisclosed recipients
+- how many messages the thread has, and whether the sender shares the account's own domain
+
+The signal layer (`src/shared/signals.ts`) is a small logistic regression. It weighs Laya's
+answers (every kind's probability, needs-reply and urgent) against those signals and picks
+the bucket. Kestrel Sort applies it after Laya, when the model folder has a `combiner.json`
+fitted for that model. The verdict moves to that bucket with the smallest change, and its
+labels follow. A moved verdict carries Laya's own probability for its new kind, so the layer
+never makes Kestrel file mail away on its own. Threads without Gmail signals (demo mode, or
+Gmail's tabs turned off) are sorted by Laya alone.
+
+It's fitted from your checked labels and your `L` corrections:
+
+```bash
+npm run laya:fit -- --labels checked.jsonl [--labels ...] [--test held-out.jsonl] [--dry-run]
+```
+
+Labelled lines are `{thread_id, kind, needs_reply, urgent, topic?}`. Kestrel's cache supplies
+each thread's signals; each correction's thread is found by its sender and subject.
+`laya:fit` runs the installed model the way Kestrel Sort does, picks the regularization by
+cross-validation, and scores `--test` threads before and after without training on them.
+The layer's id becomes part of the model name, so fitting one re-sorts the inbox. Installing
+a new model drops it: fit again for that model.
+
+Measured on 200 hand-checked threads from a VC's inbox, fitted on one half and tested on the
+other 99 (right bucket):
+
+| Bucket | ft1 alone | ft1 + signal layer |
+| --- | --- | --- |
+| All | 45.5% | 61.6% |
+| Other (pitches, marketing, newsletters) | 22 of 44 | 37 of 44 |
+| Important | 13 of 21 | 14 of 21 |
+| Calendar | 7 of 13 | 6 of 13 |
+| Updates | 2 of 9 | 4 of 9 |
+| To reply | 1 of 10 | 0 of 10 |
+| Codes | 0 of 2 | 0 of 2 |
+
+On that inbox, ft1 sorted 45.5%, far below its 94.9% on the personal-Gmail set, which is
+mostly marketing. Rewording Laya's questions reached only 48.5%: the fine-tuned model doesn't
+follow questions it wasn't trained on. Gmail's own signals did better. To reply, Calendar and
+Codes still need more examples or fine-tuning.
+
 ## Rescue
 
 **Done → Never opened → Find mail from people** reads mail archived while unread

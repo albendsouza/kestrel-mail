@@ -10,10 +10,10 @@ import os from 'os'
 import path from 'path'
 
 import { Agent } from '../../vendor/laya-ts/src/index'
-import { KINDS, SORT_QUESTIONS, TOPICS, sortState } from '../shared/sorting'
+import { combine, usableCombiner, type Combiner } from '../shared/signals'
+import { SORT_QUESTIONS, sortState, verdictFromAnswers } from '../shared/sorting'
 import { GpuLaya } from './gpu'
 
-import type { MailKind, NoticeTopic, SortVerdict } from '../shared/sorting'
 import type { SortRequest, SortResponse } from '../sync/sorter'
 
 export type SortCommand = { type: 'init'; modelDir: string } | { type: 'connect' } // connect carries a MessagePort
@@ -122,24 +122,7 @@ function touch(): void {
   }, IDLE_EXIT_MS)
 }
 
-interface Answers {
-  kind?: { choice?: string; answer_confidence?: number }
-  needs_reply?: { noul?: number }
-  urgent?: { noul?: number }
-  topic?: { choice?: string }
-}
-
-function verdictOf(answers: Answers): SortVerdict {
-  const kind = (KINDS as readonly string[]).includes(answers.kind?.choice ?? '') ? (answers.kind!.choice as MailKind) : 'person'
-  return {
-    kind,
-    confidence: answers.kind?.answer_confidence ?? 0,
-    needsReply: answers.needs_reply?.noul ?? 0,
-    urgent: answers.urgent?.noul ?? 0,
-    // Only a model trained on topics answers this one meaningfully (see readQuestions).
-    topic: hasTopics && (TOPICS as readonly string[]).includes(answers.topic?.choice ?? '') ? (answers.topic!.choice as NoticeTopic) : undefined
-  }
-}
+type Answers = Parameters<typeof verdictFromAnswers>[0]
 
 // Whether the installed model was trained on the topic question (its questions.json says).
 let hasTopics = false
@@ -152,12 +135,28 @@ function readQuestions(): void {
 }
 
 // The installed model's name, from the manifest npm run laya:install writes.
-function modelId(): string {
+function installedId(): string {
   try {
     return (JSON.parse(fs.readFileSync(path.join(modelDir, 'manifest.json'), 'utf8')) as { id: string }).id
   } catch {
     return 'unknown'
   }
+}
+
+// The learned signal layer fitted for this model (npm run laya:fit), if there is one.
+function readCombiner(): Combiner | null {
+  try {
+    const c = JSON.parse(fs.readFileSync(path.join(modelDir, 'combiner.json'), 'utf8')) as Combiner
+    return usableCombiner(c, installedId()) ? c : null
+  } catch {
+    return null
+  }
+}
+
+// What verdicts are stamped with: the model, and the signal layer when there is one, so fitting
+// a new layer re-sorts the inbox just as installing a new model does.
+function modelId(combiner = readCombiner()): string {
+  return combiner ? `${installedId()}+signals-${combiner.id}` : installedId()
 }
 
 async function sort(req: SortRequest): Promise<SortResponse> {
@@ -171,7 +170,9 @@ async function sort(req: SortRequest): Promise<SortResponse> {
     // Both runtimes give the same answers (checked to 1e-4 on 200 real emails), so verdicts
     // keep the model's name either way and nothing is re-sorted when the runtime changes.
     const answers = (await onGpu(states, questions)) ?? (await onCpu(states, questions))
-    return { id: req.id, model: modelId(), verdicts: answers.map(verdictOf) }
+    const combiner = readCombiner()
+    const verdicts = answers.map((a, i) => combine(combiner, verdictFromAnswers(a, hasTopics), req.items[i].signals))
+    return { id: req.id, model: modelId(combiner), verdicts }
   } catch (e) {
     return { id: req.id, error: e instanceof Error ? e.message : String(e), unavailable: e instanceof ModelMissing }
   } finally {

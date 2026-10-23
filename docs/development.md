@@ -8,7 +8,7 @@
 | `src/setup` | Smart-sorting setup shared by the app and `npm run laya:setup`: uv, laya-mps, its Python environment, Laya's checkpoint, installing a model |
 | `src/sync` | Kestrel Sync: `engine.ts` (the mail model), `providers/` (Gmail, demo, the tour's practice inbox), `split.ts`, `sorter.ts`, `mime.ts` |
 | `src/sort` | Kestrel Sort: runs Laya, on the GPU through a Python worker (`gpu.ts`, `gpu_worker.py`) or on the CPU |
-| `src/shared` | Types and logic both sides use: `types.ts`, `sorting.ts` (Laya's questions and the label and split rules), date parsing, credentials |
+| `src/shared` | Types and logic both sides use: `types.ts`, `sorting.ts` (Laya's questions and the label and split rules), `signals.ts` (the learned signal layer), date parsing, credentials |
 | `src/renderer` | React UI: `app` (the mail view, sidebar, tour, keys), `strip` (tab strip), `guide` (the Google setup guide) |
 | `src/preload` | Sandboxed preload scripts, one per kind of view |
 | `vendor/laya-ts` | Laya's TypeScript runtime, vendored (it isn't on npm). Changes are marked `// Kestrel:` |
@@ -68,6 +68,7 @@ client.
 | Script | What it does |
 |---|---|
 | `npm run laya:setup [-- --checkpoint dir] [--laya-mps dir] [--force]` | Apple silicon: what Turn on smart sorting does, from the terminal (uv, laya-mps, Python, a Laya checkpoint) |
+| `npm run laya:fit -- --labels file [--test file] [--dry-run]` | fits the learned signal layer for the installed model from checked labels and `L` corrections, scores a held-out set before and after, and installs `combiner.json` ([smart-inbox.md](smart-inbox.md#the-learned-signal-layer)) |
 | `npm run laya:install -- <folder> [--id name] [--questions file]` | installs an ONNX model where Kestrel Sort looks for it, with a checksum manifest |
 | `... --torch <checkpoint> --gpu <laya-mps> [--gpu-memory reduced]` | also installs the PyTorch checkpoint, so Sort runs Laya on the GPU ([smart-inbox.md](smart-inbox.md#on-the-gpu)) |
 | `node scripts/laya/rows.mjs <files> --out <dir> [--topics file]` | turns labelled emails into Laya training rows, holding out a test slice |

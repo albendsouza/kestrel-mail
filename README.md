@@ -9,7 +9,10 @@ smart inbox runs [Laya](https://github.com/NandhaKishorM/laya), an open encoder
 model we fine-tuned on email. No email leaves the machine to be sorted.
 
 - **Split inbox:** Important, To reply, Calendar, Codes, Updates and Other, decided
-  by Laya on this Mac.
+  by Laya on this Mac. A learned signal layer also weighs what Gmail already knows
+  (importance, inbox tab, mailing lists, recipients) against Laya's answers, fitted
+  from your own checked labels and corrections
+  ([how](docs/smart-inbox.md#the-learned-signal-layer)).
 - **Auto labels** on every conversation (To respond, FYI, Calendar, Code,
   Security, Finance, Purchase, Travel, Marketing, News, Social, Pitch…), listed in
   the sidebar.
