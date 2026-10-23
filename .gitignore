@@ -1,0 +1,12 @@
+node_modules/
+dist/
+out/
+*.log
+release/
+kestrel.local.json
+.DS_Store
+*.tmp
+# Laya models and training data stay outside the repo (they're large, and test sets hold real mail).
+models/
+*.onnx
+*.onnx.data

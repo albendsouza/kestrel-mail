@@ -1,0 +1,19 @@
+:root { --bg: #f2f3f5; --tab: #ffffff; --fg: #1f2328; --muted: #6b7280; --accent: #5b5bf0; color-scheme: light dark; }
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #0f1013; --tab: #16171b; --fg: #e6e6e9; --muted: #8b8e98; --accent: #8a8aff; }
+}
+html, body, #root { margin: 0; height: 100%; background: var(--bg); overflow: hidden; }
+body { font: 12px -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif; color: var(--fg); user-select: none; }
+.strip { display: flex; align-items: flex-end; height: 100%; padding: 0 8px; gap: 2px; -webkit-app-region: drag; }
+.strip.mac { padding-left: 80px; }
+.tab, .new-tab { -webkit-app-region: no-drag; }
+.tab { display: flex; align-items: center; gap: 6px; height: 30px; padding: 0 8px 0 12px; max-width: 220px; min-width: 90px; border-radius: 8px 8px 0 0; color: var(--muted); cursor: default; }
+.tab.active { background: var(--tab); color: var(--fg); }
+.tab-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+.tab-count { background: var(--accent); color: #fff; border-radius: 8px; padding: 0 6px; font-size: 10px; font-weight: 700; line-height: 16px; }
+.tab-close { border: 0; background: none; color: var(--muted); font-size: 14px; width: 18px; height: 18px; border-radius: 4px; padding: 0; line-height: 1; visibility: hidden; }
+.tab:hover .tab-close, .tab.active .tab-close { visibility: visible; }
+.tab-close:hover { background: rgba(127, 127, 127, 0.2); }
+.new-tab { border: 0; background: none; color: var(--muted); font-size: 18px; width: 28px; height: 28px; border-radius: 6px; margin-bottom: 1px; }
+.new-tab:hover { background: rgba(127, 127, 127, 0.15); }
+.drag-fill { flex: 1; height: 100%; }

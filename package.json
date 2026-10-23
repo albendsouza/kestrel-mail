@@ -1,0 +1,92 @@
+{
+  "name": "kestrel-mail",
+  "version": "0.1.0",
+  "description": "Keyboard-first desktop email client",
+  "private": true,
+  "main": "dist/main/main.js",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "start": "npm run build && electron .",
+    "demo": "npm run build && KESTREL_DEMO=1 electron .",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "smoke": "npm run build && node scripts/smoke.mjs",
+    "smoke:all": "npm run build && node scripts/smoke.mjs --all",
+    "smoke:live": "npm run build && node scripts/smoke.mjs --live",
+    "dist": "NODE_ENV=production npm run build && electron-builder",
+    "laya:install": "node scripts/laya/install.mjs"
+  },
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^22.20.5",
+    "@types/react": "^18.3.31",
+    "@types/react-dom": "^18.3.7",
+    "electron": "^44.9.3",
+    "electron-builder": "^26.15.3",
+    "esbuild": "^0.25.12",
+    "typescript": "5.8",
+    "vitest": "^4.1.12"
+  },
+  "dependencies": {
+    "dompurify": "^3.4.17",
+    "onnxruntime-node": "^1.20.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "build": {
+    "appId": "io.github.albendsouza.kestrel",
+    "productName": "Kestrel",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**",
+      "package.json",
+      "node_modules/onnxruntime-node/**",
+      "node_modules/onnxruntime-common/**"
+    ],
+    "protocols": [
+      {
+        "name": "Email",
+        "schemes": [
+          "mailto"
+        ]
+      }
+    ],
+    "mac": {
+      "category": "public.app-category.productivity",
+      "hardenedRuntime": true,
+      "notarize": true,
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        }
+      ]
+    },
+    "win": {
+      "target": [
+        "nsis"
+      ]
+    },
+    "linux": {
+      "target": [
+        "AppImage"
+      ],
+      "category": "Office"
+    },
+    "asarUnpack": [
+      "node_modules/onnxruntime-node/**"
+    ]
+  }
+}
