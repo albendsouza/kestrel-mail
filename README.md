@@ -27,25 +27,55 @@ model we fine-tuned on email. No email leaves the machine to be sorted.
 
 ```bash
 npm install
-npm run demo      # a demo inbox with sample mail, no account needed
-npm start         # your Gmail (see "Connect Gmail" below)
+npm run laya:setup   # Apple silicon: smart sorting on the Mac's GPU with laya-mps (once, about 2 GB)
+npm run demo         # a demo inbox with sample mail, no account needed
+npm start            # your Gmail (see "Connect Gmail" below)
 ```
 
-Requirements: Node 20 or newer. Kestrel is developed on macOS; smart sorting has
-been tested on Apple silicon (M4 Pro). There it takes about 0.04 s per email on the GPU,
-with [laya-mps](https://github.com/afshinm/laya-mps) set up, or about 0.25 s on the CPU.
+Requirements: Node 20 or newer and macOS. Smart sorting runs best on Apple silicon, where
+`npm run laya:setup` installs [laya-mps](https://github.com/afshinm/laya-mps) and Laya's model
+(see [Smart sorting on Apple silicon](#smart-sorting-on-apple-silicon)). Without a model Kestrel
+works normally and keeps every conversation in Important; the status bar says "Smart
+sorting is off".
 
-Smart sorting needs Laya's model, which isn't in this repo (about 1.3 GB). Without
-it Kestrel works normally and keeps every conversation in Important; the status
-bar says "Smart sorting is off". To install a model:
+## Smart sorting on Apple silicon
+
+Kestrel runs Laya on the Mac's GPU with [laya-mps](https://github.com/afshinm/laya-mps) by
+Afshin Mehrabani (MIT). laya-mps loads Laya's PyTorch weights onto Apple's Metal
+Performance Shaders, the GPU backend PyTorch uses on a Mac. Every Mac with Apple silicon
+should use it:
 
 ```bash
-npm run laya:install -- /path/to/model --id laya-email-ft1
+npm run laya:setup
 ```
 
-[docs/smart-inbox.md](docs/smart-inbox.md) explains how to convert and fine-tune
-one, and [how to run it on the GPU](docs/smart-inbox.md#on-the-gpu), which is about six
-times faster.
+What it does, once:
+
+1. Checks the Mac has Apple silicon, and installs [uv](https://docs.astral.sh/uv/) with
+   Homebrew if it's missing (laya-mps uses uv for its Python environment).
+2. Downloads laya-mps, at the commit Kestrel was tested with, into
+   `~/Library/Application Support/kestrel-mail/laya-mps`.
+3. Installs its Python environment with PyTorch (`uv sync --locked`, about 700 MB).
+4. Downloads Laya's English checkpoint through laya-mps (843 MB) and installs it for Kestrel.
+
+After that, sorting works offline. Restart Kestrel if it was running.
+
+| On an M4 Pro, per email | One new email | A backlog |
+| --- | --- | --- |
+| GPU, laya-mps | 42 ms | about 24 emails/s |
+| CPU, ONNX Runtime | 254 ms | 3.3 emails/s |
+
+Both give the same answers. If the GPU worker can't start, Kestrel says so in its log and
+falls back to the CPU when the model has a CPU copy.
+
+The English checkpoint isn't fine-tuned on email. On a hand-labelled real inbox it put 88%
+of mail in the right split; Kestrel's fine-tuned model reached 95%, and it isn't published
+yet. To use your own checkpoint (a laya-train output), run
+`npm run laya:setup -- --checkpoint <folder>`. Other options: `--laya-mps <folder>` reuses a
+checkout you already have, `--force` replaces an installed model, and `--gpu-memory
+minimal|reduced|full` picks laya-mps's memory setting (`reduced` by default; `full` measured
+no faster). On an Intel Mac, Kestrel sorts on the CPU with an ONNX model:
+[docs/smart-inbox.md](docs/smart-inbox.md) explains how to convert, fine-tune and install one.
 
 ## Connect Gmail
 
@@ -220,8 +250,8 @@ asks for a privacy policy, a demo video and possibly a security assessment.
 
 Attachments, rich-text compose, Gmail push through Pub/Sub (Kestrel polls every
 30 s), IMAP and Outlook, snippets, Apple's on-device model as a second opinion on
-uncertain mail, hosting Laya's model for download, and bundling the GPU runtime in
-release builds (today it needs a laya-mps checkout).
+uncertain mail, publishing Kestrel's fine-tuned model, and bundling the GPU runtime in
+release builds (from source, `npm run laya:setup` installs it).
 
 ## Credits
 
@@ -229,8 +259,9 @@ release builds (today it needs a laya-mps checkout).
   (Apache-2.0). Kestrel vendors its TypeScript runtime in `vendor/laya-ts` and
   fine-tunes its multilingual checkpoint.
 - [laya-mps](https://github.com/afshinm/laya-mps) by Afshin Mehrabani (MIT) runs Laya
-  on the Mac's GPU. Kestrel's GPU worker uses its loader in its environment; no
-  laya-mps code is copied.
+  on the Mac's GPU. `npm run laya:setup` installs it at a pinned commit, and Kestrel's
+  GPU worker uses its loader in its environment. No laya-mps code is copied into this
+  repo.
 - [Inbox Zero](https://github.com/elie222/inbox-zero) inspired Senders, Reply Zero
   and stats. No Inbox Zero code is included.
 - Superhuman inspired the architecture and the split inbox. No Superhuman code or

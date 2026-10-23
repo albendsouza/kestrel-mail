@@ -61,8 +61,10 @@ so a large Done takes a few minutes, with progress shown.
 
 ## Models
 
-Laya's official checkpoints ship as PyTorch weights only. Kestrel needs ONNX, made
-once with Laya's own export script and checked against PyTorch to within 1e-4:
+Laya's official checkpoints ship as PyTorch weights. On Apple silicon, `npm run laya:setup`
+installs one to run on the GPU as it is ([On the GPU](#on-the-gpu)). On the CPU,
+Kestrel needs ONNX, made once with Laya's own export script and checked against PyTorch
+to within 1e-4:
 
 ```bash
 python laya-ts/scripts/export_onnx.py --repo convaiinnovations/laya --subfolder multilingual --out-dir ./model
@@ -86,15 +88,36 @@ small and accurate, and it reads Hinglish, so Kestrel uses it.
 
 ### On the GPU
 
-Kestrel Sort runs Laya on the Mac's GPU when the installed model also has its PyTorch
-checkpoint. It starts `src/sort/gpu_worker.py` in laya-mps's Python environment and talks to
-it over stdin and stdout. If the worker can't start or a request fails, Sort sorts on the
-CPU instead. `KESTREL_LAYA_DEVICE=cpu` forces the CPU.
+On Apple silicon, Kestrel runs Laya on the GPU with
+[laya-mps](https://github.com/afshinm/laya-mps) by Afshin Mehrabani (MIT), which runs Laya's
+PyTorch weights on Metal Performance Shaders. This is the default setup for every Mac with
+Apple silicon:
 
 ```bash
-git clone https://github.com/afshinm/laya-mps.git ../laya-mps
-(cd ../laya-mps && uv sync --locked --no-dev)
-npm run laya:install -- ./model --id laya-email-ft1 --torch <laya-train output> --gpu ../laya-mps
+npm run laya:setup
+```
+
+`scripts/laya/setup.mjs` does the following:
+- installs uv with Homebrew if needed
+- downloads laya-mps at a pinned, tested commit into `~/Library/Application Support/kestrel-mail/laya-mps`
+- runs `uv sync --locked --no-dev` there
+- downloads Laya's English checkpoint with `laya-mps setup --checkpoint english`
+- installs it with `laya:install --torch`
+
+It does nothing when the installed model already runs on the GPU, and it never replaces an
+installed model without `--force`. To use another checkpoint, pass `--checkpoint <laya-train
+output>`; to reuse an existing laya-mps checkout, pass `--laya-mps <folder>`.
+
+Kestrel Sort runs Laya on the GPU when the installed model has a PyTorch checkpoint (its
+`torch/` folder) and a `gpu.json` naming laya-mps's Python. It starts
+`src/sort/gpu_worker.py` in that environment and talks to it over stdin and stdout. If the
+worker can't start or a request fails, Sort uses the model's ONNX copy on the CPU when
+there is one. `KESTREL_LAYA_DEVICE=cpu` forces the CPU.
+
+To give an ONNX model its GPU checkpoint by hand, so it runs on both:
+
+```bash
+npm run laya:install -- ./model --id laya-email-ft1 --torch <laya-train output> --gpu <laya-mps folder>
 ```
 
 `--torch` is the PyTorch checkpoint the ONNX export was made from; laya-train writes it.
@@ -160,6 +183,7 @@ promotions written to sound like a person. The next model is trained on all thre
 - Apple's on-device Foundation Models as a second opinion on low-confidence verdicts
   (it needs Apple Intelligence set up on the Mac).
 - Hosting the fine-tuned model for download, so installs don't have to convert one.
-- Shipping the GPU runtime in release builds. Today it needs a laya-mps checkout with its
-  Python environment, about 700 MB. laya-mps found ONNX Runtime's Core ML route ran on
-  the CPU, and the Neural Engine export capped inputs at 96 tokens.
+- Bundling the GPU runtime in release builds. From source, `npm run laya:setup` installs
+  it; a packaged app would need laya-mps's Python environment (about 700 MB) inside it.
+  laya-mps found ONNX Runtime's Core ML route ran on the CPU, and the Neural Engine export
+  capped inputs at 96 tokens.

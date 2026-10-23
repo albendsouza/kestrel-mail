@@ -1,12 +1,14 @@
-// Installs a Laya model (an export_onnx.py output folder) where Kestrel Sort looks for it:
-//   npm run laya:install -- <model folder> [--id name] [--questions <checkpoint>/questions.json]
+// Installs a Laya model where Kestrel Sort looks for it:
+//   npm run laya:install -- [<ONNX folder>] [--id name] [--questions <checkpoint>/questions.json]
 //                           [--torch <checkpoint folder> --gpu <laya-mps checkout> [--gpu-memory reduced]]
-// Writes manifest.json with the model's name and SHA-256 sums. Kestrel re-sorts the
-// inbox whenever the name changes. --torch adds the same model's PyTorch checkpoint, which
-// Kestrel Sort then runs on the Mac's GPU in laya-mps's Python environment (--gpu).
+// The ONNX folder (an export_onnx.py output) runs on the CPU. --torch adds the PyTorch
+// checkpoint, which Kestrel Sort runs on the Mac's GPU in laya-mps's Python environment
+// (--gpu); with only --torch, the model runs on the GPU alone. npm run laya:setup does all
+// this on Apple silicon. Writes manifest.json with the model's name and SHA-256 sums.
+// Kestrel re-sorts the inbox whenever the name changes.
 
 import { createHash } from 'node:crypto'
-import { cpSync, createReadStream, existsSync, mkdirSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { constants, cpSync, createReadStream, existsSync, mkdirSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 
@@ -14,7 +16,7 @@ const args = process.argv.slice(2)
 const FLAGS = ['--id', '--questions', '--torch', '--gpu', '--gpu-memory']
 const value = flag => (args.includes(flag) ? args[args.indexOf(flag) + 1] : null)
 const src = args.find((a, i) => !a.startsWith('--') && !FLAGS.includes(args[i - 1]))
-const id = value('--id') ?? path.basename(path.resolve(src ?? ''))
+const id = value('--id') ?? path.basename(path.resolve(src ?? value('--torch') ?? ''))
 const NEEDED = ['encoder.onnx', 'head.onnx', 'tokenizer.json', 'rl_agent_config.json']
 // The questions the model was trained on; laya-train writes them beside the checkpoint.
 const questions = value('--questions')
@@ -24,8 +26,8 @@ const TORCH_NEEDED = ['model.safetensors', 'rl_agent_config.json', 'encoder/conf
 const python = value('--gpu') && path.join(path.resolve(value('--gpu')), '.venv', 'bin', 'python')
 const gpuMemory = value('--gpu-memory') ?? 'reduced'
 
-if (!src || NEEDED.some(f => !existsSync(path.join(src, f)))) {
-  console.error(`Usage: npm run laya:install -- <folder with ${NEEDED.join(', ')}> [--id name]`)
+if ((!src && !torch) || (src && NEEDED.some(f => !existsSync(path.join(src, f))))) {
+  console.error(`Usage: npm run laya:install -- <folder with ${NEEDED.join(', ')}> [--id name], and/or --torch <checkpoint> --gpu <laya-mps>`)
   process.exit(1)
 }
 if (torch && TORCH_NEEDED.some(f => !existsSync(path.join(torch, f)))) {
@@ -50,12 +52,14 @@ const sha256 = file =>
 const filesIn = (dir, prefix = '') =>
   readdirSync(dir).flatMap(f => (statSync(path.join(dir, f)).isDirectory() ? filesIn(path.join(dir, f), `${prefix}${f}/`) : [`${prefix}${f}`]))
 
+// Copy-on-write clones on APFS, so a model already on disk takes no extra space.
+const clone = { recursive: true, mode: constants.COPYFILE_FICLONE }
 rmSync(dest, { recursive: true, force: true })
-mkdirSync(path.dirname(dest), { recursive: true })
-cpSync(src, dest, { recursive: true })
-if (questions) cpSync(questions, path.join(dest, 'questions.json'))
+mkdirSync(dest, { recursive: true })
+if (src) cpSync(src, dest, clone)
+if (questions) cpSync(questions, path.join(dest, 'questions.json'), clone)
 if (torch) {
-  for (const f of TORCH_NEEDED) cpSync(path.join(torch, f), path.join(dest, 'torch', f), { recursive: true })
+  for (const f of TORCH_NEEDED) cpSync(path.join(torch, f), path.join(dest, 'torch', f), clone)
   writeFileSync(path.join(dest, 'gpu.json'), JSON.stringify({ python, memory: gpuMemory }, null, 2))
 }
 const files = {}

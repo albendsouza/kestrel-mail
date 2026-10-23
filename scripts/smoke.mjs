@@ -44,7 +44,7 @@ const env = {
 // Laya's model lives outside the test profile (it's over a gigabyte); point Kestrel Sort at it.
 const model = path.join(os.homedir(), 'Library', 'Application Support', 'kestrel-mail', 'models', 'laya-email')
 if (!env.KESTREL_LAYA_MODEL && existsSync(model)) env.KESTREL_LAYA_MODEL = model
-if (!env.KESTREL_LAYA_MODEL) console.log('smoke: no Laya model installed (npm run laya:install), so sorting checks will fail')
+if (!env.KESTREL_LAYA_MODEL) console.log('smoke: no Laya model installed (npm run laya:setup), so sorting checks will fail')
 if (live) env.KESTREL_READ_ONLY = '1'
 else Object.assign(env, { KESTREL_DEMO: '1', KESTREL_DEMO_LATENCY_MS: '700' })
 // The first-run checks need a Kestrel with no client, so --all never passes one.

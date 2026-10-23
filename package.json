@@ -14,7 +14,8 @@
     "smoke:all": "npm run build && node scripts/smoke.mjs --all",
     "smoke:live": "npm run build && node scripts/smoke.mjs --live",
     "dist": "NODE_ENV=production npm run build && electron-builder",
-    "laya:install": "node scripts/laya/install.mjs"
+    "laya:install": "node scripts/laya/install.mjs",
+    "laya:setup": "node scripts/laya/setup.mjs"
   },
   "license": "MIT",
   "devDependencies": {

@@ -38,10 +38,17 @@ let idleTimer: ReturnType<typeof setTimeout> | null = null
 
 class ModelMissing extends Error {}
 
+const NOT_INSTALLED = () => `Laya's model isn't installed in ${modelDir}. Run npm run laya:setup on a Mac with Apple silicon, or see docs/smart-inbox.md.`
+// laya:setup installs the GPU checkpoint alone; an ONNX export adds the CPU copy.
+const hasCpuModel = () => fs.existsSync(path.join(modelDir, 'encoder.onnx'))
+const hasGpuModel = () => fs.existsSync(path.join(modelDir, 'torch', 'model.safetensors'))
+
 function load(): Promise<Agent> {
   if (!agent) {
-    if (!fs.existsSync(path.join(modelDir, 'encoder.onnx'))) {
-      return Promise.reject(new ModelMissing(`Laya's model isn't installed in ${modelDir} (run npm run laya:install).`))
+    if (!hasCpuModel()) {
+      return Promise.reject(
+        new ModelMissing(hasGpuModel() ? `Laya can't run on the GPU and ${modelDir} has no CPU copy of the model (see docs/smart-inbox.md).` : NOT_INSTALLED())
+      )
     }
     // Half the cores: sorting a big inbox shouldn't make the Mac feel busy.
     agent = Agent.load(modelDir, { numThreads: Math.max(2, Math.floor(os.cpus().length / 2)) })
@@ -59,7 +66,7 @@ function loadGpu(): Promise<GpuLaya | null> {
   if (!gpu) {
     gpu = (async () => {
       const torchDir = path.join(modelDir, 'torch')
-      if (process.env.KESTREL_LAYA_DEVICE === 'cpu' || !fs.existsSync(path.join(torchDir, 'model.safetensors'))) return null
+      if (process.env.KESTREL_LAYA_DEVICE === 'cpu' || !hasGpuModel()) return null
       let config: { python?: string; memory?: string }
       try {
         config = JSON.parse(fs.readFileSync(path.join(modelDir, 'gpu.json'), 'utf8'))
@@ -155,7 +162,7 @@ function modelId(): string {
 
 async function sort(req: SortRequest): Promise<SortResponse> {
   try {
-    if (!fs.existsSync(path.join(modelDir, 'encoder.onnx'))) throw new ModelMissing(`Laya's model isn't installed in ${modelDir} (run npm run laya:install).`)
+    if (!hasCpuModel() && !hasGpuModel()) throw new ModelMissing(NOT_INSTALLED())
     if (!req.items.length) return { id: req.id, model: modelId(), verdicts: [] }
     readQuestions()
     const { topic: _topic, ...base } = SORT_QUESTIONS

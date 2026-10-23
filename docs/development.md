@@ -64,6 +64,7 @@ client.
 
 | Script | What it does |
 |---|---|
+| `npm run laya:setup [-- --checkpoint dir] [--laya-mps dir] [--force]` | Apple silicon: installs laya-mps (pinned commit) and a Laya checkpoint for GPU sorting |
 | `npm run laya:install -- <folder> [--id name] [--questions file]` | installs an ONNX model where Kestrel Sort looks for it, with a checksum manifest |
 | `... --torch <checkpoint> --gpu <laya-mps> [--gpu-memory reduced]` | also installs the PyTorch checkpoint, so Sort runs Laya on the GPU ([smart-inbox.md](smart-inbox.md#on-the-gpu)) |
 | `node scripts/laya/rows.mjs <files> --out <dir> [--topics file]` | turns labelled emails into Laya training rows, holding out a test slice |
