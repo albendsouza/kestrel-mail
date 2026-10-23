@@ -57,6 +57,7 @@ client.
 | `KESTREL_GMAIL_UNITS_PER_MINUTE` | Gmail quota pace (default 2,400) |
 | `KESTREL_READ_ONLY=1` | refuse every change to Gmail (used by `smoke:live`) |
 | `KESTREL_DEMO_LATENCY_MS` | fake network delay in demo mode |
+| `KESTREL_SMOKE_DESIGN_QUERY`, `KESTREL_SMOKE_DESIGN_COUNT` | `smoke:live` only: for mail matching a Gmail search, report which backgrounds each email uses and whether Kestrel keeps it on a light page (sender domains and colours only, never content) |
 
 ## Laya scripts
 

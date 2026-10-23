@@ -42,11 +42,27 @@ export function sanitizeEmailHtml(html: string, allowRemote: boolean): { html: s
   }
 }
 
-// Mail with a design of its own (newsletters, receipts) paints its own backgrounds and
-// is written for a light page. Mail a person typed has none, even when it's HTML:
-// Gmail wraps ordinary mail in HTML and its signatures hard-code near-black text.
+// Backgrounds that don't colour anything. Typed mail is full of them: Google Docs and
+// Outlook stamp background-color:transparent (or white) on every line they touch.
+const PLAIN_BACKGROUND = /^(transparent|none|inherit|initial|unset|white|#fff|#ffffff|rgba?\(\s*255\s*,\s*255\s*,\s*255\s*(,\s*1(\.0+)?\s*)?\)|rgba\([^)]*,\s*0(\.0+)?\s*\))$/i
+
+// Layout blocks. A coloured background on one of these is a design; on a word or a
+// phrase (a span, a highlight) it's just someone highlighting text.
+const BLOCK_TAG = /<(?:body|table|thead|tbody|tr|td|th|div|center|section|header|footer|main|article)\b[^>]*>/gi
+
+// Mail with a design of its own (newsletters, receipts) paints coloured blocks or
+// background images and is written for a light page. Mail a person typed has none, even
+// when it's HTML: Gmail wraps ordinary mail in HTML and signatures hard-code dark text.
 export function hasOwnDesign(html: string): boolean {
-  return /\bbgcolor\s*=|background(-color|-image)?\s*:/i.test(html)
+  if (/background(-image)?\s*:[^;"']*url\(/i.test(html)) return true
+  // <style> blocks only appear in designed mail; check their backgrounds too.
+  const styles = [...html.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/gi)].map(m => m[1]).join(' ')
+  const tags = (html.match(BLOCK_TAG) ?? []).join(' ') + ' ' + styles
+  const colours = [
+    ...[...tags.matchAll(/background(?:-color)?\s*:\s*([^;"'}]+)/gi)].map(m => m[1]),
+    ...[...tags.matchAll(/\bbgcolor\s*=\s*["']?([^"'\s>]+)/gi)].map(m => m[1])
+  ]
+  return colours.some(c => !PLAIN_BACKGROUND.test(c.replace(/!important/i, '').trim()))
 }
 
 export function MessageBody({
@@ -83,7 +99,7 @@ img{max-width:100%;height:auto}
 blockquote{margin:0 0 0 8px;padding-left:12px;border-left:2px solid ${darkMail ? '#3a3b42' : '#ccc'};color:${darkMail ? '#9a9ca5' : '#666'}}
 ${
   // Typed mail often hard-codes dark text (signatures, <font color>); in the dark theme it would vanish.
-  darkMail && message.html ? 'body *:not(a):not(a *){color:inherit!important}blockquote,blockquote *:not(a){color:#9a9ca5!important}' : ''
+  darkMail && message.html ? 'body *:not(a):not(a *){color:inherit!important;background-color:transparent!important}blockquote,blockquote *:not(a){color:#9a9ca5!important}' : ''
 }
 </style></head><body>${html}</body></html>`
     return { srcDoc: doc, blocked: blockedImages }

@@ -289,7 +289,7 @@ export async function runSmoke(win: AppWindow, outDir: string, token?: (accountI
   // Read-only checks on your real account (npm run smoke:live). Gmail refuses every
   // change in this mode, and nothing here marks done, sends, or unsubscribes.
   const runLiveSmoke = async () => {
-    const ctx = await evalJs<{ accounts: { id: string; provider: string }[] }>('window.kestrel.context()')
+    const ctx = await evalJs<{ accounts: { id: string; provider: string; email: string }[] }>('window.kestrel.context()')
     const gmail = ctx.accounts.find(a => a.provider === 'gmail')
     check('live: a Gmail account is signed in', !!gmail)
     if (!gmail) return
@@ -326,6 +326,31 @@ export async function runSmoke(win: AppWindow, outDir: string, token?: (accountI
     results['live: Gmail search in:inbox older_than:14d'] = await gmailSearch('in:inbox older_than:14d')
     results['live: Gmail search in:inbox older_than:14d newer_than:90d'] = await gmailSearch('in:inbox older_than:14d newer_than:90d')
     results['live: Gmail search older_than:14d (any folder)'] = await gmailSearch('older_than:14d')
+    // KESTREL_SMOKE_DESIGN_QUERY: for one email, which backgrounds its HTML uses and whether
+    // Kestrel treats it as designed. Reports the background values only, never the content.
+    if (token && process.env.KESTREL_SMOKE_DESIGN_QUERY) {
+      const { hasOwnDesign } = await import('../renderer/app/MessageBody')
+      for (const a of ctx.accounts.filter(x => x.provider === 'gmail')) {
+        const api = async (path: string) =>
+          (await (await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/${path}`, { headers: { Authorization: `Bearer ${await token(a.id)}` } })).json()) as Record<string, unknown>
+        const n = Number(process.env.KESTREL_SMOKE_DESIGN_COUNT) || 1
+        const found = (await api(`messages?maxResults=${n}&q=${encodeURIComponent(process.env.KESTREL_SMOKE_DESIGN_QUERY)}`)).messages as { id: string }[] | undefined
+        const rows: unknown[] = []
+        for (const { id } of found ?? []) {
+          const msg = await api(`messages/${id}?format=full`)
+          type Part = { mimeType?: string; body?: { data?: string }; parts?: Part[]; headers?: { name: string; value: string }[] }
+          const html = (function walk(p: Part): string {
+            if (p.mimeType === 'text/html' && p.body?.data) return Buffer.from(p.body.data, 'base64url').toString('utf8')
+            return (p.parts ?? []).map(walk).join('')
+          })(msg.payload as Part)
+          if (!html) continue
+          const from = (msg.payload as Part).headers?.find(h => h.name.toLowerCase() === 'from')?.value.match(/@([^>\s]+)/)?.[1] ?? '?'
+          const values = [...html.matchAll(/background(?:-color|-image)?\s*:\s*([^;"'}]+)|\bbgcolor\s*=\s*["']?([^"'\s>]+)/gi)].map(m => (m[1] ?? m[2]).trim())
+          rows.push(`${hasOwnDesign(html) ? 'DESIGNED' : 'dark    '} ${from} :: ${[...new Set(values)].slice(0, 6).join(' | ')}`)
+        }
+        results[`live: design check (${a.email.split('@')[1]})`] = rows
+      }
+    }
     // How Done splits up, counted straight from Gmail (read-only GETs): archived unread
     // versus read, by age, and how much of it Superhuman labelled.
     if (token) {
