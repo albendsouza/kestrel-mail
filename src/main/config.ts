@@ -14,6 +14,8 @@ export const syncHostPath = (): string => path.join(distDir(), 'sync', 'host.js'
 export const sortHostPath = (): string => path.join(distDir(), 'sort', 'host.js')
 
 export const isDemo = (): boolean => process.env.KESTREL_DEMO === '1'
+// Where Kestrel Sort looks for Laya's model (npm run laya:setup or Turn on smart sorting puts it there).
+export const layaModelDir = (): string => process.env.KESTREL_LAYA_MODEL || path.join(app.getPath('userData'), 'models', 'laya-email')
 
 export const UNDO_SEND_MS = 10_000
 export const MAX_TABS_PER_WINDOW = 12

@@ -144,6 +144,18 @@ export async function runSmoke(win: AppWindow, outDir: string, token?: (accountI
 
   const subjects = () => evalJs<string[]>('[...document.querySelectorAll(".thread-row .subject")].map(s => s.textContent)')
 
+  // With no model, Kestrel offers to turn on smart sorting; Turn on installs one (copied from
+  // the installed model here, instead of 2 GB of downloads) and the inbox gets sorted.
+  const runSortingSetupSmoke = async () => {
+    check('with no model, Kestrel offers to turn on smart sorting', await waitFor('(document.querySelector(".sorting-setup")?.textContent ?? "").includes("Turn on smart sorting?")', 15_000))
+    check('the status bar says sorting is off, with Turn on', await waitFor('!!document.querySelector(".sort-note.off button.link")', 15_000))
+    await shot('00-sorting-offer')
+    await evalJs('[...document.querySelectorAll(".sorting-setup button")].find(b => b.textContent === "Turn on")?.click()')
+    check('Turn on shows setup progress', await waitFor('!!document.querySelector(".sorting-setup progress")'))
+    await shot('00-sorting-setup')
+    check('setup finishes and sorting turns on', await waitFor('!document.querySelector(".sorting-setup") && !document.querySelector(".sort-note.off")', 30_000))
+  }
+
   // Sets a reminder with H and a typed time, finds it under g h, and sends it back with Shift+E.
   const runRemindersSmoke = async () => {
     await key('g')
@@ -538,6 +550,7 @@ export async function runSmoke(win: AppWindow, outDir: string, token?: (accountI
       await runLiveSmoke()
     } else {
       for (let i = 0; i < 40 && (await rows().catch(() => 0)) === 0; i++) await sleep(250)
+      if (process.env.KESTREL_SORTING_SETUP_FROM) await runSortingSetupSmoke()
       // Laya's first sort moves threads between splits; let it settle before counting rows.
       await waitFor('!(document.querySelector(".sort-note")?.textContent ?? "").includes("Sorting")', 60_000)
       await sleep(300)

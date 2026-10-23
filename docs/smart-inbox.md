@@ -90,23 +90,25 @@ small and accurate, and it reads Hinglish, so Kestrel uses it.
 
 On Apple silicon, Kestrel runs Laya on the GPU with
 [laya-mps](https://github.com/afshinm/laya-mps) by Afshin Mehrabani (MIT), which runs Laya's
-PyTorch weights on Metal Performance Shaders. This is the default setup for every Mac with
-Apple silicon:
+PyTorch weights on Metal Performance Shaders. Every Mac with Apple silicon gets it:
 
-```bash
-npm run laya:setup
-```
+- **From the app.** Kestrel offers to turn on smart sorting when it has no model it can
+  use (`src/main/sorting-setup.ts`): a banner, **Turn on** in the status bar, or ⌘K.
+- **From the terminal.** `npm run laya:setup` runs the same code.
 
-`scripts/laya/setup.mjs` does the following:
-- installs uv with Homebrew if needed
-- downloads laya-mps at a pinned, tested commit into `~/Library/Application Support/kestrel-mail/laya-mps`
-- runs `uv sync --locked --no-dev` there
-- downloads Laya's English checkpoint with `laya-mps setup --checkpoint english`
-- installs it with `laya:install --torch`
+Both run `src/setup/laya.ts`, which installs into Kestrel's data folder
+(`~/Library/Application Support/kestrel-mail`):
+- **uv:** a pinned release from GitHub, checked against its published SHA-256 (no Homebrew).
+- **laya-mps:** a pinned commit's source archive, checked by a hash of its files (no git).
+- **Python 3.12 and the environment:** `uv sync --locked --no-dev --python 3.12`, with
+  uv's Python, cache and Hugging Face downloads kept in the data folder.
+- **The model:** Laya's English checkpoint, from `laya-mps setup --checkpoint english`
+  (a pinned Hugging Face revision), installed for Kestrel.
 
-It does nothing when the installed model already runs on the GPU, and it never replaces an
-installed model without `--force`. To use another checkpoint, pass `--checkpoint <laya-train
-output>`; to reuse an existing laya-mps checkout, pass `--laya-mps <folder>`.
+Each step keeps what's already there, so a retry resumes. Setup does nothing when the
+installed model already runs on the GPU. It never replaces an installed model without
+`--force`, and it repoints a GPU model whose Python went missing. The terminal also
+takes `--checkpoint <laya-train output>` and `--laya-mps <folder>`.
 
 Kestrel Sort runs Laya on the GPU when the installed model has a PyTorch checkpoint (its
 `torch/` folder) and a `gpu.json` naming laya-mps's Python. It starts
@@ -183,7 +185,7 @@ promotions written to sound like a person. The next model is trained on all thre
 - Apple's on-device Foundation Models as a second opinion on low-confidence verdicts
   (it needs Apple Intelligence set up on the Mac).
 - Hosting the fine-tuned model for download, so installs don't have to convert one.
-- Bundling the GPU runtime in release builds. From source, `npm run laya:setup` installs
-  it; a packaged app would need laya-mps's Python environment (about 700 MB) inside it.
-  laya-mps found ONNX Runtime's Core ML route ran on the CPU, and the Neural Engine export
-  capped inputs at 96 tokens.
+- Trying Turn on smart sorting in a packaged release build. It downloads into the data
+  folder the same way, and the GPU worker is unpacked from the archive, but it hasn't been
+  tested there. A GPU route without Python looked worse: laya-mps found ONNX Runtime's Core
+  ML route ran on the CPU, and the Neural Engine export capped inputs at 96 tokens.

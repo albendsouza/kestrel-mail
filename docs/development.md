@@ -4,7 +4,8 @@
 
 | Path | What's there |
 |---|---|
-| `src/main` | Electron main process: windows and tabs, Google sign-in, the encrypted store, menus, starting Sync and Sort, and the smoke-test driver |
+| `src/main` | Electron main process: windows and tabs, Google sign-in, the encrypted store, menus, starting Sync and Sort, Turn on smart sorting (`sorting-setup.ts`), and the smoke-test driver |
+| `src/setup` | Smart-sorting setup shared by the app and `npm run laya:setup`: uv, laya-mps, its Python environment, Laya's checkpoint, installing a model |
 | `src/sync` | Kestrel Sync: `engine.ts` (the mail model), `providers/` (Gmail, demo, the tour's practice inbox), `split.ts`, `sorter.ts`, `mime.ts` |
 | `src/sort` | Kestrel Sort: runs Laya, on the GPU through a Python worker (`gpu.ts`, `gpu_worker.py`) or on the CPU |
 | `src/shared` | Types and logic both sides use: `types.ts`, `sorting.ts` (Laya's questions and the label and split rules), date parsing, credentials |
@@ -34,8 +35,9 @@ npm run smoke:live  # read-only checks on your signed-in Gmail
   provider against a fake API (batching, the quota budget, snapshots), sorting
   rules, MIME, dates and keys.
 - **`smoke`** launches Electron with a throwaway profile on the demo inbox and checks
-  each feature end to end. If a Laya model is installed, it sorts with it. Results and
-  screenshots go to `out/smoke`.
+  each feature end to end. If a Laya model is installed, it sorts with it. On Apple
+  silicon it starts with no model and clicks Turn on smart sorting, which copies the
+  installed model in instead of downloading. Results and screenshots go to `out/smoke`.
 - **`smoke:live`** copies your Kestrel data to a temporary profile, starts Kestrel in
   a read-only mode where every change to Gmail is refused, checks sync, folders,
   labels and sorting, and deletes the copy afterwards. Results go to `out/smoke-live`.
@@ -55,6 +57,7 @@ client.
 | `KESTREL_USER_DATA` | another profile folder |
 | `KESTREL_LAYA_MODEL` | another Laya model folder |
 | `KESTREL_LAYA_DEVICE=cpu` | sort on the CPU even when the model has a GPU checkpoint |
+| `KESTREL_SORTING_SETUP_FROM` | smoke tests: Turn on smart sorting copies this model folder in instead of downloading |
 | `KESTREL_GMAIL_UNITS_PER_MINUTE` | Gmail quota pace (default 2,400) |
 | `KESTREL_READ_ONLY=1` | refuse every change to Gmail (used by `smoke:live`) |
 | `KESTREL_DEMO_LATENCY_MS` | fake network delay in demo mode |
@@ -64,7 +67,7 @@ client.
 
 | Script | What it does |
 |---|---|
-| `npm run laya:setup [-- --checkpoint dir] [--laya-mps dir] [--force]` | Apple silicon: installs laya-mps (pinned commit) and a Laya checkpoint for GPU sorting |
+| `npm run laya:setup [-- --checkpoint dir] [--laya-mps dir] [--force]` | Apple silicon: what Turn on smart sorting does, from the terminal (uv, laya-mps, Python, a Laya checkpoint) |
 | `npm run laya:install -- <folder> [--id name] [--questions file]` | installs an ONNX model where Kestrel Sort looks for it, with a checksum manifest |
 | `... --torch <checkpoint> --gpu <laya-mps> [--gpu-memory reduced]` | also installs the PyTorch checkpoint, so Sort runs Laya on the GPU ([smart-inbox.md](smart-inbox.md#on-the-gpu)) |
 | `node scripts/laya/rows.mjs <files> --out <dir> [--topics file]` | turns labelled emails into Laya training rows, holding out a test slice |

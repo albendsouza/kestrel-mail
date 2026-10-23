@@ -3,6 +3,8 @@
 
 import { contextBridge, ipcRenderer } from 'electron'
 
+import type { SortingSetup } from '../shared/types'
+
 const APP_ORIGIN = 'kestrel://app'
 
 ipcRenderer.on('kestrel:port', event => {
@@ -23,7 +25,17 @@ const api = {
   reopenSignIn: () => ipcRenderer.invoke('kestrel:reopenSignIn'),
   signOut: (accountId: string): Promise<{ revoked: boolean }> => ipcRenderer.invoke('kestrel:signOut', accountId),
   openExternal: (url: string) => ipcRenderer.invoke('kestrel:openExternal', url),
-  onCommand: (cb: (command: { type: string; [k: string]: unknown }) => void) => {
+  sortingSetup: (): Promise<SortingSetup> => ipcRenderer.invoke('kestrel:sortingSetup'),
+  startSortingSetup: (): Promise<SortingSetup> => ipcRenderer.invoke('kestrel:startSortingSetup'),
+  dismissSortingSetup: (): Promise<SortingSetup> => ipcRenderer.invoke('kestrel:dismissSortingSetup'),
+  onSortingSetup: (cb: (state: SortingSetup) => void) => {
+    const listener = (_e: Electron.IpcRendererEvent, state: SortingSetup) => cb(state)
+    ipcRenderer.on('kestrel:sortingSetup', listener)
+    return () => {
+      ipcRenderer.off('kestrel:sortingSetup', listener)
+    }
+  },
+  onCommand:(cb: (command: { type: string; [k: string]: unknown }) => void) => {
     const listener = (_e: Electron.IpcRendererEvent, command: { type: string }) => cb(command)
     ipcRenderer.on('kestrel:command', listener)
     return () => {

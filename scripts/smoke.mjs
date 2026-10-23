@@ -41,10 +41,16 @@ const env = {
   KESTREL_SMOKE_SCREENSHOT: out,
   KESTREL_SMOKE_SUITES: live ? 'live' : all ? 'all' : 'core'
 }
-// Laya's model lives outside the test profile (it's over a gigabyte); point Kestrel Sort at it.
+// Laya's model lives outside the test profile (it's over a gigabyte). On Apple silicon the
+// demo run starts with none and uses Turn on smart sorting, which copies this one in instead of
+// downloading; elsewhere Kestrel Sort is pointed straight at it.
 const model = path.join(os.homedir(), 'Library', 'Application Support', 'kestrel-mail', 'models', 'laya-email')
-if (!env.KESTREL_LAYA_MODEL && existsSync(model)) env.KESTREL_LAYA_MODEL = model
-if (!env.KESTREL_LAYA_MODEL) console.log('smoke: no Laya model installed (npm run laya:setup), so sorting checks will fail')
+const installed = env.KESTREL_LAYA_MODEL || (existsSync(model) ? model : null)
+if (installed && !live && process.platform === 'darwin' && os.arch() === 'arm64') {
+  env.KESTREL_SORTING_SETUP_FROM = installed
+  env.KESTREL_LAYA_MODEL = path.join(userData, 'models', 'laya-email')
+} else if (installed) env.KESTREL_LAYA_MODEL = installed
+else console.log('smoke: no Laya model installed (npm run laya:setup), so sorting checks will fail')
 if (live) env.KESTREL_READ_ONLY = '1'
 else Object.assign(env, { KESTREL_DEMO: '1', KESTREL_DEMO_LATENCY_MS: '700' })
 // The first-run checks need a Kestrel with no client, so --all never passes one.

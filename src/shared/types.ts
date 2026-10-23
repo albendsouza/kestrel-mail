@@ -194,6 +194,17 @@ export interface AutoLabelCount {
   unread: number
 }
 
+// Turning on smart sorting from inside the app (src/main/sorting-setup.ts).
+export interface SortingSetup {
+  offer: boolean // this Mac can sort on its GPU and has no model it can use
+  dismissed: boolean // "Not now" on the offer
+  running: boolean
+  label?: string // the current step
+  percent?: number // of the whole setup
+  error?: string // why the last attempt failed
+  done?: boolean // finished in this session
+}
+
 export interface SortState {
   state: 'idle' | 'sorting' | 'unavailable'
   done: number

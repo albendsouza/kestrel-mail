@@ -20,6 +20,7 @@ interface StoreData {
   tokens: Record<string, string> // accountId -> encrypted (base64) or plain refresh token
   tokensEncrypted: boolean
   tourDone: boolean // finished or skipped the guided tour
+  sortingOfferDismissed?: boolean // said "Not now" to setting up smart sorting
   // A Google OAuth client entered on the welcome screen; the secret is encoded like tokens.
   googleClient?: { clientId: string; clientSecret: string }
 }
@@ -84,6 +85,15 @@ export class Store {
 
   setTourDone(): void {
     this.data.tourDone = true
+    this.save()
+  }
+
+  sortingOfferDismissed(): boolean {
+    return !!this.data.sortingOfferDismissed
+  }
+
+  dismissSortingOffer(): void {
+    this.data.sortingOfferDismissed = true
     this.save()
   }
 

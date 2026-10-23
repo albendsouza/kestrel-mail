@@ -4,7 +4,7 @@
 import { app, MessageChannelMain, utilityProcess, type UtilityProcess, type WebContents } from 'electron'
 import path from 'path'
 
-import { sortHostPath, syncHostPath } from './config'
+import { layaModelDir, sortHostPath, syncHostPath } from './config'
 
 import type { Account } from '../shared/types'
 import type { SortCommand } from '../sort/host'
@@ -42,14 +42,21 @@ export class SyncHost {
     if (this.stopping) return
     const child = utilityProcess.fork(sortHostPath(), [], { serviceName: 'Kestrel Sort', stdio: 'inherit' })
     this.sorter = child
-    const modelDir = process.env.KESTREL_LAYA_MODEL || path.join(app.getPath('userData'), 'models', 'laya-email')
-    child.postMessage({ type: 'init', modelDir } satisfies SortCommand)
+    child.postMessage({ type: 'init', modelDir: layaModelDir() } satisfies SortCommand)
     child.on('exit', code => {
       if (this.sorter !== child) return
       this.sorter = null
       setTimeout(() => this.spawnSorter(), code === 0 ? 0 : 2000)
     })
     this.linkSorter()
+  }
+
+  // A fresh Sort after a new model is installed; Sync then sorts whatever is waiting.
+  restartSorter(): void {
+    const old = this.sorter
+    this.sorter = null // so its exit doesn't start a second one
+    old?.kill()
+    this.spawnSorter()
   }
 
   // A channel between Sync and Sort; either end restarting gets a fresh one.

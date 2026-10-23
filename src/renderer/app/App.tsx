@@ -19,6 +19,7 @@ import type {
   InboxWindow,
   MailLabel,
   SortState,
+  SortingSetup,
   RescueState,
   AutoLabel,
   AutoFileState,
@@ -397,6 +398,13 @@ function Mailbox({ ctx, account }: { ctx: Context; account: Account }) {
   const [toasts, setToasts] = useState<Toast[]>([])
   const [syncState, setSyncState] = useState<string>('syncing')
   const [sortState, setSortState] = useState<SortState | null>(null)
+  // Turning on smart sorting (laya-mps and Laya's model), offered on Macs with Apple silicon.
+  const [sortingSetup, setSortingSetup] = useState<SortingSetup | null>(null)
+  useEffect(() => {
+    void window.kestrel.sortingSetup().then(setSortingSetup)
+    return window.kestrel.onSortingSetup(setSortingSetup)
+  }, [])
+  const turnOnSorting = useCallback(() => void window.kestrel.startSortingSetup().then(setSortingSetup), [])
   const [autoLabels, setAutoLabels] = useState<AutoLabelCount[]>([])
   const [autoFile, setAutoFileState] = useState<AutoFileState | null>(null)
   const [rescue, setRescue] = useState<RescueState | null>(null)
@@ -1071,6 +1079,40 @@ function Mailbox({ ctx, account }: { ctx: Context; account: Account }) {
           )}
         </div>
       )}
+      {sortingSetup?.running ? (
+        <div className="file-banner sorting-setup" role="status">
+          <span>
+            Setting up smart sorting: {sortingSetup.label}… <strong>{sortingSetup.percent ?? 0}%</strong>. Kestrel keeps working meanwhile.
+          </span>
+          <progress max={100} value={sortingSetup.percent ?? 0} />
+        </div>
+      ) : sortingSetup?.error ? (
+        <div className="file-banner sorting-setup" role="alert">
+          <span>Smart sorting setup stopped: {sortingSetup.error}</span>
+          <button className="primary" onClick={turnOnSorting}>
+            Try again
+          </button>
+        </div>
+      ) : (
+        sortingSetup?.offer &&
+        !sortingSetup.dismissed && (
+          <div className="file-banner sorting-setup">
+            <span>
+              <strong>Turn on smart sorting?</strong> Kestrel downloads Laya's model and{' '}
+              <a href="https://github.com/afshinm/laya-mps" onClick={e => (e.preventDefault(), void window.kestrel.openExternal('https://github.com/afshinm/laya-mps'))}>
+                laya-mps
+              </a>
+              , which runs it on your Mac's GPU: about 2 GB, once. Sorting then happens on this Mac, and your mail never leaves it.
+            </span>
+            <button className="primary" onClick={turnOnSorting}>
+              Turn on
+            </button>
+            <button className="ghost" onClick={() => void window.kestrel.dismissSortingSetup().then(setSortingSetup)}>
+              Not now
+            </button>
+          </div>
+        )
+      )}
       {autoFile?.on === null && autoFile.waiting > 0 && !folder && (
         <div className="file-banner">
           <span>
@@ -1202,11 +1244,26 @@ function Mailbox({ ctx, account }: { ctx: Context; account: Account }) {
                 · Sorting {sortState.done} of {sortState.total}
               </span>
             )}
-            {sortState?.state === 'unavailable' && (
-              <span className="sort-note off" title={sortState.message}>
+            {sortingSetup?.running ? (
+              <span className="sort-note">
                 {' '}
-                · Smart sorting is off
+                · Setting up smart sorting {sortingSetup.percent ?? 0}%
               </span>
+            ) : (
+              sortState?.state === 'unavailable' && (
+                <span className="sort-note off" title={sortState.message}>
+                  {' '}
+                  · Smart sorting is off
+                  {sortingSetup?.offer && (
+                    <>
+                      {' '}
+                      <button className="link" onClick={turnOnSorting}>
+                        Turn on
+                      </button>
+                    </>
+                  )}
+                </span>
+              )
             )}
           </span>
           <span className="muted">
@@ -1280,6 +1337,7 @@ function Mailbox({ ctx, account }: { ctx: Context; account: Account }) {
           ctx={ctx}
           account={account}
           splits={splits}
+          onTurnOnSorting={sortingSetup?.offer && !sortingSetup.running ? turnOnSorting : undefined}
           onClose={() => setOverlay(null)}
           run={command => {
             setOverlay(null)
@@ -1777,6 +1835,7 @@ function Palette({
   run,
   goSplit,
   onSignOut,
+  onTurnOnSorting,
   onClose
 }: {
   ctx: Context
@@ -1785,6 +1844,7 @@ function Palette({
   run: (c: Command) => void
   goSplit: (id: string) => void
   onSignOut: () => void
+  onTurnOnSorting?: () => void
   onClose: () => void
 }) {
   const [text, setText] = useState('')
@@ -1803,10 +1863,11 @@ function Palette({
       ...accountItems,
       { label: 'Add or switch account in this tab', run: () => void window.kestrel.useAccount(null) },
       { label: 'Take the guided tour', run: () => void window.kestrel.startTour() },
+      ...(onTurnOnSorting ? [{ label: 'Turn on smart sorting (laya-mps on the GPU)', run: onTurnOnSorting }] : []),
       { label: 'Sign in to another account', run: () => void window.kestrel.useAccount(null) },
       { label: `Sign out of ${account.email}`, run: onSignOut }
     ]
-  }, [ctx.accounts, account, splits, run, goSplit, onSignOut])
+  }, [ctx.accounts, account, splits, run, goSplit, onSignOut, onTurnOnSorting])
 
   const words = text.toLowerCase().split(/\s+/).filter(Boolean)
   const filtered = items.filter(i => words.every(w => i.label.toLowerCase().includes(w)))

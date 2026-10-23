@@ -7,6 +7,7 @@ import { APP_HOST, APP_ORIGIN, APP_SCHEME, UNDO_SEND_MS, distDir, isDemo, preloa
 import { googleClientFromEnv, isGoogleClientId, revokeToken, SignInError, signInWithGoogle, TokenManager, type GoogleClient } from './google-auth'
 import { buildMenu } from './menu'
 import { isTrustedSender, openExternalSafely } from './security'
+import { broadcastSortingSetup, initSortingSetup, sortingSetup, startSortingSetup, stopSortingSetup } from './sorting-setup'
 import { Store } from './store'
 import { SyncHost } from './sync-host'
 import { AppWindow, lockToUrl, type Tab } from './window'
@@ -326,6 +327,18 @@ function registerIpc(): void {
     return { revoked }
   })
 
+  // Turn on smart sorting: installs laya-mps and Laya's model, then restarts Sort with it.
+  handle('kestrel:sortingSetup', () => sortingSetup())
+  handle('kestrel:startSortingSetup', () => {
+    startSortingSetup(() => syncHost.restartSorter())
+    return sortingSetup()
+  })
+  handle('kestrel:dismissSortingSetup', () => {
+    store.dismissSortingOffer()
+    broadcastSortingSetup()
+    return sortingSetup()
+  })
+
   // The tour runs in a fresh practice inbox. A new id each time means a stale
   // cache from an earlier run can never load.
   handle('kestrel:startTour', event => {
@@ -397,6 +410,7 @@ async function start(): Promise<void> {
     store.upsertAccount({ id: 'demo', email: 'you@kestrel.demo', name: 'Demo User', provider: 'demo' })
   }
   syncHost.start(store.accounts())
+  initSortingSetup(() => store.sortingOfferDismissed())
   // A tour left running at quit restarts from the beginning next time.
   removePracticeAccounts()
   registerIpc()
@@ -443,6 +457,7 @@ app.on('second-instance', (_e, argv) => {
 
 app.on('before-quit', () => {
   persistWindows()
+  stopSortingSetup()
   syncHost?.stop()
 })
 

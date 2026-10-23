@@ -22,6 +22,11 @@ times) and gives every tab a fresh port; the tab client replays requests that we
 in flight. Sort exits after five idle minutes to free the model's memory, and main
 starts a new one straight away. It stays small until it has mail to sort.
 
+Turn on smart sorting also runs in the main process (src/main/sorting-setup.ts, with
+src/setup/laya.ts doing the work). It downloads and installs laya-mps and Laya's model
+with child processes, sends progress to every tab, and restarts Sort when it's done.
+The new Sort's port makes Sync sort whatever is waiting.
+
 ## The engine (src/sync/engine.ts)
 
 `AccountEngine` is the whole mail model for one account. Everything the UI shows
